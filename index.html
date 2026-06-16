@@ -1088,15 +1088,14 @@ async function openPanel(id){
     <div class="ps-head"><div class="ps-title">Müşteri Bilgileri</div></div>
     <div class="ps-body">
       <div class="field-grid">
-        <div class="fi"><div class="fl">Ad Soyad</div><div class="fv">${c.name}</div></div>
-        <div class="fi"><div class="fl">Telefon</div><div class="fv"><a class="phone-link" href="tel:${c.phone}">${c.phone}</a></div></div>
-        <div class="fi"><div class="fl">E-posta</div><div class="fv" style="font-size:11px">${c.email||'—'}</div></div>
-        <div class="fi"><div class="fl">Vize Türü</div><div class="fv">${c.visa}</div></div>
+        <div class="fi"><div class="fl">Ad Soyad</div><input class="fi2" id="ed-name-${c.id}" value="${c.name}" style="padding:6px;width:100%"></div>
+        <div class="fi"><div class="fl">Telefon</div><input class="fi2" id="ed-phone-${c.id}" value="${c.phone}" style="padding:6px;width:100%"></div>
+        <div class="fi"><div class="fl">E-posta</div><input class="fi2" id="ed-email-${c.id}" value="${c.email||''}" style="padding:6px;width:100%"></div>
+        <div class="fi"><div class="fl">Vize Türü</div><input class="fi2" id="ed-visa-${c.id}" value="${c.visa}" style="padding:6px;width:100%"></div>
         <div class="fi"><div class="fl">Satış Temsilcisi</div><div class="fv">${c.rep}</div></div>
-        <div class="fi"><div class="fl">Operasyon</div><div class="fv">${c.ops}</div></div>
         <div class="fi"><div class="fl">Aşamada Gün</div><div class="fv" style="color:${c.days>7?'var(--red)':'var(--text)'}">${c.days} gün</div></div>
-        <div class="fi"><div class="fl">Son Güncelleme</div><div class="fv" style="font-size:10px;color:var(--text2)">${c.lastMod}</div></div>
       </div>
+      <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="updateCustomerInfo('${c.id}')">💾 Müşteri Bilgilerini Kaydet</button>
     </div>
   </div>
 
@@ -1128,8 +1127,8 @@ async function openPanel(id){
 
   <div class="ps">
     <div class="ps-head"><div class="ps-title">Ödeme Durumu</div><span style="font-size:11px;color:${pct>=100?'var(--green)':'var(--amber)'}">%${pct} tahsil edildi</span></div>
-    <div class="pay-row"><div class="pay-lbl">Toplam Bedel</div><div class="pay-val">₺${c.fee.toLocaleString('tr-TR')}</div></div>
-    <div class="pay-row"><div class="pay-lbl">Ön Ödeme Alındı</div><div style="display:flex;align-items:center;gap:8px"><div class="pay-val" style="color:var(--green)">₺${c.prepay.toLocaleString('tr-TR')}</div><span class="pbadge pb-ok">✓ Alındı</span></div></div>
+    <div class="pay-row"><div class="pay-lbl">Toplam Bedel</div><div style="display:flex;align-items:center;gap:8px"><input class="fi2" type="number" id="ed-fee-${c.id}" value="${c.fee}" style="padding:6px;width:100px"><span style="font-size:11px;color:var(--text3)">₺</span></div></div>
+    <div class="pay-row"><div class="pay-lbl">Ön Ödeme Alındı</div><div style="display:flex;align-items:center;gap:8px"><input class="fi2" type="number" id="ed-prepay-${c.id}" value="${c.prepay}" style="padding:6px;width:100px"><span style="font-size:11px;color:var(--text3)">₺</span><button class="btn btn-primary btn-sm" onclick="updatePayment('${c.id}')">✓ Kaydet</button></div></div>
     <div class="pay-row"><div class="pay-lbl">Kalan Ödeme</div><div style="display:flex;align-items:center;gap:8px">
       <div class="pay-val" style="color:${rem>0?'var(--amber)':'var(--green)'}">₺${rem.toLocaleString('tr-TR')}</div>
       ${rem>0?`<span class="pbadge pb-pend">⏳ Bekliyor</span><button class="btn btn-success btn-sm" onclick="markPaid('${c.id}')">Tahsil ✓</button>`:'<span class="pbadge pb-ok">✓ Tamamlandı</span>'}
@@ -1145,17 +1144,22 @@ async function openPanel(id){
   <div class="ps">
     <div class="ps-head"><div class="ps-title">Belgeler</div></div>
     <div class="ps-body" style="display:flex;flex-direction:column;gap:6px">
-    ${['Pasaport','Banka Ekstresi','Maaş Bordrosu','SGK Kaydı'].map(d=>{
-      const st=docMap[d]||'Bekleniyor';
+    ${(documents||[]).map(d=>{
       return `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:7px;border:1px solid var(--border)">
-        <span style="font-size:12px;color:var(--text)">📄 ${d}</span>
-        <select class="sel" style="font-size:11px;padding:3px 8px;width:auto" onchange="updateDocStatus('${c.id}','${d}',this.value)">
-          <option value="Bekleniyor" ${st==='Bekleniyor'?'selected':''}>⏳ Bekleniyor</option>
-          <option value="Yüklendi" ${st==='Yüklendi'?'selected':''}>📤 Yüklendi</option>
-          <option value="Onaylandı" ${st==='Onaylandı'?'selected':''}>✓ Onaylandı</option>
+        <span style="font-size:12px;color:var(--text)">📄 ${d.doc_name}</span>
+        <select class="sel" style="font-size:11px;padding:3px 8px;width:auto" onchange="updateDocStatus('${c.id}','${d.doc_name}',this.value)">
+          <option value="Bekleniyor" ${d.status==='Bekleniyor'?'selected':''}>⏳ Bekleniyor</option>
+          <option value="Yüklendi" ${d.status==='Yüklendi'?'selected':''}>📤 Yüklendi</option>
+          <option value="Onaylandı" ${d.status==='Onaylandı'?'selected':''}>✓ Onaylandı</option>
         </select>
       </div>`;}).join('')}
+    ${CU.role==='management'?`
+    <div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
+      <input class="fi2" id="new-doc-${c.id}" type="text" placeholder="Belge adı (örn: Davet Mektubu)" style="padding:6px;flex:1;font-size:11px">
+      <button class="btn btn-primary btn-sm" onclick="addNewDocument('${c.id}')">+ Ekle</button>
+    </div>
+    `:''}
     </div>
   </div>
 
@@ -1287,6 +1291,56 @@ async function updateDocStatus(id,docName,status){
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
     toast('✓ '+docName+': '+status,'green');
+  }catch(e){
+    toast('Bağlantı hatası','red');
+  }
+}
+
+async function updateCustomerInfo(id){
+  const nm=document.getElementById('ed-name-'+id)?.value.trim();
+  const ph=document.getElementById('ed-phone-'+id)?.value.trim();
+  const em=document.getElementById('ed-email-'+id)?.value.trim();
+  const vi=document.getElementById('ed-visa-'+id)?.value.trim();
+  if(!nm||!ph){toast('Ad ve Telefon zorunludur','red');return;}
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateCustomerInfo',customerId:id,name:nm,phone:ph,email:em,visa_type:vi,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
+    await loadCustomers();
+    await openPanel(id);
+    if(document.getElementById('cust-tbody'))renderRows();
+    toast('✓ Müşteri bilgileri güncellendi','green');
+  }catch(e){
+    toast('Bağlantı hatası','red');
+  }
+}
+
+async function updatePayment(id){
+  const fee=parseInt(document.getElementById('ed-fee-'+id)?.value)||0;
+  const prepay=parseInt(document.getElementById('ed-prepay-'+id)?.value)||0;
+  if(!fee){toast('Toplam bedel gereklidir','red');return;}
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePayment',customerId:id,fee,prepay,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
+    await loadCustomers();
+    await openPanel(id);
+    if(document.getElementById('cust-tbody'))renderRows();
+    toast('✓ Ödeme bilgileri güncellendi','green');
+  }catch(e){
+    toast('Bağlantı hatası','red');
+  }
+}
+
+async function addNewDocument(id){
+  const docName=document.getElementById('new-doc-'+id)?.value.trim();
+  if(!docName){toast('Belge adı gereklidir','red');return;}
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addDocument',customerId:id,docName,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Eklenemedi'),'red');return;}
+    await openPanel(id);
+    toast('✓ Belge eklendi','green');
   }catch(e){
     toast('Bağlantı hatası','red');
   }
