@@ -651,45 +651,58 @@ async function showPage(p){
   document.getElementById('page-title').textContent=PTITLES[p]||p;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.querySelector('[onclick="showPage(\''+p+'\')"]')?.classList.add('active');
+  if(p==='dashboard'||p==='customers'||p==='pipeline')await loadCustomers();
   await ({dashboard:renderDash,customers:renderCusts,pipeline:renderPipeline,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
 }
 function gSearch(q){const sq=q.toLowerCase();filtered=customers.filter(c=>c.name.toLowerCase().includes(sq)||c.id.toLowerCase().includes(sq)||c.phone.includes(sq));if(document.getElementById('cust-tbody'))renderRows();}
 
 // DASHBOARD
+const PRESALE_STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Teklif Gönderildi'];
+function fmtTL(n){
+  n=n||0;
+  if(n>=1000000)return '₺'+(n/1000000).toFixed(2)+'M';
+  if(n>=1000)return '₺'+Math.round(n/1000)+'K';
+  return '₺'+n.toLocaleString('tr-TR');
+}
+function topGroups(arr,keyFn,limit){
+  const map={};
+  arr.forEach(c=>{const k=keyFn(c);if(!k)return;map[k]=(map[k]||0)+1;});
+  const list=Object.entries(map).sort((a,b)=>b[1]-a[1]).slice(0,limit||4);
+  const max=list.length?list[0][1]:1;
+  return {list,max};
+}
+function barsHTML(list,max,colors){
+  if(!list.length)return'<div style="font-size:12px;color:var(--text3);padding:8px 0">Henüz veri yok</div>';
+  return list.map(([label,count],i)=>`<div class="bar-row"><div class="bar-lbl">${label}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(8,Math.round(count/max*100))}%;background:${colors[i%colors.length]}"></div></div><div class="bar-val">${count} kişi</div></div>`).join('');
+}
+
 function renderDash(){
+  const all=customers;
+  const activeCount=all.filter(c=>c.status!=='Tamamlandı'&&c.status!=='İptal').length;
+  const totalCollected=all.reduce((s,c)=>s+(c.prepay||0),0);
+  const pendingList=all.filter(c=>(c.fee||0)-(c.prepay||0)>0);
+  const pendingTotal=pendingList.reduce((s,c)=>s+((c.fee||0)-(c.prepay||0)),0);
+  const cancelledCount=all.filter(c=>c.status==='İptal').length;
+  const staleList=all.filter(c=>c.days>7&&c.status!=='Tamamlandı'&&c.status!=='İptal');
+
+  const byCountry=topGroups(all,c=>c.country);
+  const byRep=topGroups(all.filter(c=>!PRESALE_STAGES.includes(c.status)&&c.status!=='İptal'),c=>c.rep);
+  const byStatus=topGroups(all,c=>c.status);
+  const byVisa=topGroups(all,c=>c.visa);
+
   document.getElementById('main-content').innerHTML=`
   <div class="stats-grid">
-    <div class="stat-card c-green"><div class="stat-icon" style="background:var(--green-bg);color:var(--green)">💰</div><div class="stat-val" style="color:var(--green)">₺1.74M</div><div class="stat-label">Aylık Gelir</div><div class="stat-trend" style="color:var(--green)">↑ %12 geçen aya göre</div></div>
-    <div class="stat-card c-red"><div class="stat-icon" style="background:var(--red-bg);color:var(--red)">↩</div><div class="stat-val" style="color:var(--red)">₺398K</div><div class="stat-label">İade — %22.9</div><div class="stat-trend" style="color:var(--red)">Hedef: %10'un altı</div></div>
-    <div class="stat-card c-blue"><div class="stat-icon" style="background:var(--accent-l);color:var(--accent)">📂</div><div class="stat-val" style="color:var(--accent)">47</div><div class="stat-label">Aktif Başvuru</div><div class="stat-trend" style="color:var(--text2)">3 randevu bu hafta</div></div>
-    <div class="stat-card c-amber"><div class="stat-icon" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div class="stat-val" style="color:var(--amber)">₺312K</div><div class="stat-label">Bekleyen Tahsilat</div><div class="stat-trend" style="color:var(--text2)">8 müşteride kalan</div></div>
+    <div class="stat-card c-green"><div class="stat-icon" style="background:var(--green-bg);color:var(--green)">💰</div><div class="stat-val" style="color:var(--green)">${fmtTL(totalCollected)}</div><div class="stat-label">Toplam Tahsilat</div></div>
+    <div class="stat-card c-amber"><div class="stat-icon" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div class="stat-val" style="color:var(--amber)">${fmtTL(pendingTotal)}</div><div class="stat-label">Bekleyen Tahsilat</div><div class="stat-trend" style="color:var(--text2)">${pendingList.length} müşteride kalan</div></div>
+    <div class="stat-card c-blue"><div class="stat-icon" style="background:var(--accent-l);color:var(--accent)">📂</div><div class="stat-val" style="color:var(--accent)">${activeCount}</div><div class="stat-label">Aktif Başvuru</div></div>
+    <div class="stat-card c-red"><div class="stat-icon" style="background:var(--red-bg);color:var(--red)">✕</div><div class="stat-val" style="color:var(--red)">${cancelledCount}</div><div class="stat-label">İptal Edilen</div></div>
   </div>
-  <div class="alert alert-red"><div style="display:flex;align-items:center;gap:10px"><span>⚠️</span><div><div style="font-size:13px;font-weight:600;color:var(--red)">5 dosya 7+ gün aynı aşamada bekliyor</div><div style="font-size:11px;color:var(--text2);margin-top:1px">Bekleyen dosyalar iade riskini artırır</div></div></div><button class="btn btn-danger btn-sm" onclick="showPage('customers')">Görüntüle →</button></div>
+  ${staleList.length?`<div class="alert alert-red"><div style="display:flex;align-items:center;gap:10px"><span>⚠️</span><div><div style="font-size:13px;font-weight:600;color:var(--red)">${staleList.length} dosya 7+ gün aynı aşamada bekliyor</div><div style="font-size:11px;color:var(--text2);margin-top:1px">Bekleyen dosyalar iade riskini artırır</div></div></div><button class="btn btn-danger btn-sm" onclick="showPage('customers')">Görüntüle →</button></div>`:''}
   <div class="charts-grid">
-    <div class="chart-card"><div class="chart-title">Ülkeye Göre Satış</div>
-      <div class="bar-row"><div class="bar-lbl">🇩🇪 Almanya</div><div class="bar-track"><div class="bar-fill" style="width:85%;background:var(--accent)"></div></div><div class="bar-val">12 satış</div></div>
-      <div class="bar-row"><div class="bar-lbl">🇬🇧 İngiltere</div><div class="bar-track"><div class="bar-fill" style="width:55%;background:var(--purple)"></div></div><div class="bar-val">8 satış</div></div>
-      <div class="bar-row"><div class="bar-lbl">🇳🇱 Hollanda</div><div class="bar-track"><div class="bar-fill" style="width:38%;background:var(--green)"></div></div><div class="bar-val">5 satış</div></div>
-      <div class="bar-row"><div class="bar-lbl">🇫🇷 Fransa</div><div class="bar-track"><div class="bar-fill" style="width:25%;background:var(--amber)"></div></div><div class="bar-val">4 satış</div></div>
-    </div>
-    <div class="chart-card"><div class="chart-title">Temsilci Performansı</div>
-      <div class="bar-row"><div class="bar-lbl">Ece A.</div><div class="bar-track"><div class="bar-fill" style="width:90%;background:#2563EB"></div></div><div class="bar-val">12 satış</div></div>
-      <div class="bar-row"><div class="bar-lbl">Mehmet K.</div><div class="bar-track"><div class="bar-fill" style="width:55%;background:#D97706"></div></div><div class="bar-val">7 satış</div></div>
-      <div class="bar-row"><div class="bar-lbl">Ayşe T.</div><div class="bar-track"><div class="bar-fill" style="width:40%;background:#059669"></div></div><div class="bar-val">6 satış</div></div>
-      <div class="bar-row"><div class="bar-lbl">Burak S.</div><div class="bar-track"><div class="bar-fill" style="width:28%;background:#DC2626"></div></div><div class="bar-val">4 satış</div></div>
-    </div>
-    <div class="chart-card"><div class="chart-title">Pipeline Dağılımı</div>
-      <div class="bar-row"><div class="bar-lbl">Belge Bekl.</div><div class="bar-track"><div class="bar-fill" style="width:55%;background:var(--amber)"></div></div><div class="bar-val">10 kişi</div></div>
-      <div class="bar-row"><div class="bar-lbl">Sonuç Bekl.</div><div class="bar-track"><div class="bar-fill" style="width:45%;background:var(--purple)"></div></div><div class="bar-val">12 kişi</div></div>
-      <div class="bar-row"><div class="bar-lbl">Randevu Ara.</div><div class="bar-track"><div class="bar-fill" style="width:35%;background:var(--accent)"></div></div><div class="bar-val">7 kişi</div></div>
-      <div class="bar-row"><div class="bar-lbl">Yeni Kayıt</div><div class="bar-track"><div class="bar-fill" style="width:30%;background:var(--text3)"></div></div><div class="bar-val">8 kişi</div></div>
-    </div>
-    <div class="chart-card"><div class="chart-title">İade Nedenleri</div>
-      <div class="bar-row"><div class="bar-lbl">Güvensizlik</div><div class="bar-track"><div class="bar-fill" style="width:70%;background:var(--red)"></div></div><div class="bar-val">%34</div></div>
-      <div class="bar-row"><div class="bar-lbl">Rakip fiyat</div><div class="bar-track"><div class="bar-fill" style="width:50%;background:var(--amber)"></div></div><div class="bar-val">%24</div></div>
-      <div class="bar-row"><div class="bar-lbl">İletişim yok</div><div class="bar-track"><div class="bar-fill" style="width:45%;background:#FB923C"></div></div><div class="bar-val">%22</div></div>
-      <div class="bar-row"><div class="bar-lbl">Diğer</div><div class="bar-track"><div class="bar-fill" style="width:20%;background:var(--text3)"></div></div><div class="bar-val">%20</div></div>
-    </div>
+    <div class="chart-card"><div class="chart-title">Ülkeye Göre Dağılım</div>${barsHTML(byCountry.list,byCountry.max,['var(--accent)','var(--purple)','var(--green)','var(--amber)'])}</div>
+    <div class="chart-card"><div class="chart-title">Temsilci Performansı (Satışı Kapanan)</div>${barsHTML(byRep.list,byRep.max,['#2563EB','#D97706','#059669','#DC2626'])}</div>
+    <div class="chart-card"><div class="chart-title">Pipeline Dağılımı</div>${barsHTML(byStatus.list,byStatus.max,['var(--amber)','var(--purple)','var(--accent)','var(--text3)'])}</div>
+    <div class="chart-card"><div class="chart-title">Vize Türüne Göre Dağılım</div>${barsHTML(byVisa.list,byVisa.max,['#7C3AED','#0891B2','#D97706','#059669'])}</div>
   </div>`;
 }
 
