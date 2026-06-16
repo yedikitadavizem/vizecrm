@@ -537,7 +537,7 @@ const STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İlet
 const SCLS={'Yeni Kayıt':'b-lead','Sonra Ara':'b-callback','Ulaşılamıyor':'b-unreachable','İlgilenmiyor':'b-notinterested','İletişime Geçildi':'b-contacted','Teklif Gönderildi':'b-proposal','Satış Kapatıldı':'b-sale','Ödeme Alındı':'b-payment','Belge Bekleniyor':'b-docs-pending','Belgeler Tamam':'b-docs-done','Randevu Aranıyor':'b-appt-search','Randevu Alındı':'b-appt-sched','Başvuru Yapıldı':'b-submitted','Sonuç Bekleniyor':'b-waiting','Tamamlandı':'b-completed','İptal':'b-cancelled'};
 const MONTHS=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 const RCOLS={'Ece Aydın':'#2563EB','Mehmet Kaya':'#D97706','Ayşe Türk':'#059669','Burak Sarı':'#DC2626','Ceren Yılmaz':'#0891B2','Onur Demir':'#7C3AED','Zehra Kaya':'#0D9488'};
-const notesStore={},callStore={};
+// Notlar ve aramalar artık customer_notes / customer_calls tablolarından geliyor
 
 let customers=[];
 let filtered=[];
@@ -560,7 +560,8 @@ async function loadCustomers(){
       days:r.last_modified_at?Math.max(0,Math.floor((Date.now()-new Date(r.last_modified_at).getTime())/86400000)):0,
       lastMod:fmtDT(r.last_modified_at),
       apptDate:r.appt_date||'',
-      refundStatus:r.refund_status||false,refundAmount:r.refund_amount||0,refundReason:r.refund_reason||'',refundDate:r.refund_date||''
+      refundStatus:r.refund_status||false,refundAmount:r.refund_amount||0,refundReason:r.refund_reason||'',refundDate:r.refund_date||'',
+      callTotal:r.call_total||0,callReached:r.call_reached||0
     }));
     filtered=[...customers];
   }catch(e){
@@ -791,8 +792,6 @@ function renderRows(){
   tb.innerHTML=list.map(c=>{
     const col=RCOLS[c.rep]||'#2563EB';
     const rem=c.fee-c.prepay;
-    const calls=callStore[c.id]||[];
-    const reached=calls.filter(x=>x.result==='ulasildi').length;
     const stale=c.days>7;
     return `<tr onclick="openPanel('${c.id}')">
       <td style="font-family:monospace;font-size:11px;color:var(--text3)">${c.id}</td>
@@ -800,7 +799,7 @@ function renderRows(){
       <td><a class="phone-link" href="tel:${c.phone}" onclick="event.stopPropagation()">${c.phone}</a></td>
       <td>${c.country}</td>
       <td><span class="badge ${SCLS[c.status]||'b-lead'}">${c.status}</span></td>
-      <td>${calls.length===0?'<span style="color:var(--text3)">—</span>':`<span style="color:var(--accent);font-weight:700;font-size:12px">📞${calls.length}</span><span style="color:var(--green);font-size:10px;margin-left:4px">${reached}✓</span>`}</td>
+      <td>${c.callTotal===0?'<span style="color:var(--text3)">—</span>':`<span style="color:var(--accent);font-weight:700;font-size:12px">📞${c.callTotal}</span><span style="color:var(--green);font-size:10px;margin-left:4px">${c.callReached}✓</span>`}</td>
       <td style="font-size:11px;color:${c.apptDate?'var(--accent)':'var(--text3)'}">${c.apptDate?'📅 '+fmtDate(c.apptDate):'—'}</td>
       <td style="font-size:11px;color:${rem<=0?'var(--green)':'var(--amber)'};font-weight:600">${rem<=0?'✓ Tam':'₺'+rem.toLocaleString('tr-TR')}</td>
       <td><div style="display:flex;align-items:center;gap:6px"><div class="av av-24" style="background:${col};color:#fff">${initials(c.rep)}</div><span style="font-size:11px;color:var(--text2)">${c.rep.split(' ')[0]}</span></div></td>
@@ -1027,13 +1026,30 @@ async function savePw(){
 const RLABELS={ulasildi:'✅ Ulaşıldı',cevapsiz:'📵 Cevap Vermedi',sonra_ara:'🔄 Sonra Ara',mesaj:'💬 Mesaj Bırakıldı'};
 const RCLS={ulasildi:'b-completed',cevapsiz:'b-cancelled',sonra_ara:'b-callback',mesaj:'b-proposal'};
 
-function openPanel(id){
+async function openPanel(id){
   const c=customers.find(x=>x.id===id);if(!c)return;
   document.getElementById('pn-name').textContent=c.name;
   document.getElementById('pn-fileno').textContent=c.id+' · '+c.country;
   document.getElementById('pn-lastmod').textContent='🕐 '+c.lastMod;
   document.getElementById('overlay').classList.add('open');
   document.getElementById('detail-panel').classList.add('open');
+  document.getElementById('panel-body').innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div>';
+
+  let notes=[],calls=[],salesReps=[];
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getCustomerDetail',customerId:id,token:CU.token})});
+    const d=await res.json();
+    notes=(d.notes||[]).map(n=>({text:n.text,author:n.author||'—',date:fmtDT(n.created_at)}));
+    calls=(d.calls||[]).map(cl=>({caller:cl.caller||'—',date:fmtDT(cl.created_at),result:cl.result,note:cl.note}));
+  }catch(e){}
+  if(CU.role==='management'){
+    try{
+      const res2=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getUsers',token:CU.token})});
+      const d2=await res2.json();
+      salesReps=(d2.users||[]).filter(u=>u.role==='sales');
+    }catch(e){}
+  }
+  const reached=calls.filter(x=>x.result==='ulasildi').length;
 
   const si=STAGES.indexOf(c.status);
   const rel=['Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı'];
@@ -1042,10 +1058,6 @@ function openPanel(id){
   const rem=c.fee-c.prepay,pct=c.fee>0?Math.round(c.prepay/c.fee*100):0;
   const canMove=CU.role!=='sales'||si<5;
   const next=STAGES[si+1];
-  const notes=notesStore[c.id]||[];
-  const calls=callStore[c.id]||[];
-  const reached=calls.filter(x=>x.result==='ulasildi').length;
-
   const tl=[
     {l:'Dosya oluşturuldu',m:'15 May 2024 · '+c.rep},
     c.prepay>0?{l:'Ön ödeme: ₺'+c.prepay.toLocaleString('tr-TR'),m:'16 May 2024 · '+c.rep}:null,
@@ -1185,7 +1197,7 @@ function openPanel(id){
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
         <select class="sel" id="transfer-rep-${c.id}" style="flex:1;min-width:160px">
           <option value="">Temsilci seç...</option>
-          <option>Sema</option><option>Seda</option><option>Eray</option><option>Tayfur</option>
+          ${salesReps.map(u=>`<option value="${u.username}">${u.name}</option>`).join('')}
         </select>
         <button class="btn btn-primary btn-sm" onclick="transferCustomer('${c.id}')">Aktar →</button>
       </div>
@@ -1217,17 +1229,22 @@ function openPanel(id){
   `;
 }
 
-function transferCustomer(id){
+async function transferCustomer(id){
   const sel = document.getElementById('transfer-rep-'+id);
   const newRep = sel?.value;
   if(!newRep){toast('Lütfen bir temsilci seçin','amber');return;}
-  const cust = customers.find(x=>x.id===id);if(!cust)return;
-  const oldRep = cust.rep;
-  cust.rep = newRep;
-  cust.lastMod = nowStr();
-  closePanel();
-  renderRows();
-  toast('✓ '+cust.name+' → '+newRep+' temsilcisine aktarıldı','green');
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'transferCustomer',customerId:id,newRepUsername:newRep,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Aktarılamadı'),'red');return;}
+    await loadCustomers();
+    await openPanel(id);
+    if(document.getElementById('cust-tbody'))renderRows();
+    if(document.getElementById('kanban'))renderPipeline();
+    toast('✓ Temsilciye aktarıldı','green');
+  }catch(e){
+    toast('Bağlantı hatası','red');
+  }
 }
 
 async function addRefund(id){
@@ -1239,7 +1256,7 @@ async function addRefund(id){
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
     await loadCustomers();
-    openPanel(id);
+    await openPanel(id);
     toast('✓ İade kaydedildi','red');
   }catch(e){
     toast('Bağlantı hatası','red');
@@ -1252,8 +1269,6 @@ async function deleteCustomer(id, name){
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'deleteCustomer',customerId:id,token:CU.token})});
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Silinemedi'),'red');return;}
-    delete notesStore[id];
-    delete callStore[id];
     await loadCustomers();
     closePanel();
     if(document.getElementById('cust-tbody'))renderRows();
@@ -1264,7 +1279,21 @@ async function deleteCustomer(id, name){
   }
 }
 
-function saveAppt(id){const c=customers.find(x=>x.id===id);if(!c)return;const v=document.getElementById('ap-'+id)?.value;c.apptDate=v||'';c.lastMod=nowStr();openPanel(id);renderRows();toast(v?'📅 Randevu: '+fmtDate(v):'Tarih temizlendi','blue');}
+async function saveAppt(id){
+  const v=document.getElementById('ap-'+id)?.value||'';
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateAppt',customerId:id,apptDate:v,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
+    await loadCustomers();
+    await openPanel(id);
+    if(document.getElementById('cust-tbody'))renderRows();
+    if(document.getElementById('kanban'))renderPipeline();
+    toast(v?'📅 Randevu: '+fmtDate(v):'Tarih temizlendi','blue');
+  }catch(e){
+    toast('Bağlantı hatası','red');
+  }
+}
 async function moveStatus(id,ns){
   try{
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateCustomerStatus',customerId:id,newStatus:ns,token:CU.token})});
@@ -1279,26 +1308,49 @@ async function moveStatus(id,ns){
     toast('Bağlantı hatası','red');
   }
 }
-function markPaid(id){const c=customers.find(x=>x.id===id);if(!c)return;c.prepay=c.fee;c.lastMod=nowStr();openPanel(id);renderRows();toast('✓ Kalan ödeme tahsil edildi','green');}
-function addCall(id){
+async function markPaid(id){
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'markPaid',customerId:id,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+JSON.stringify(d.error||'İşlem yapılamadı'),'red');return;}
+    await loadCustomers();
+    await openPanel(id);
+    if(document.getElementById('cust-tbody'))renderRows();
+    if(document.getElementById('kanban'))renderPipeline();
+    toast('✓ Kalan ödeme tahsil edildi','green');
+  }catch(e){
+    toast('Bağlantı hatası','red');
+  }
+}
+async function addCall(id){
   const r=document.getElementById('cl-r-'+id)?.value,nt=(document.getElementById('cl-n-'+id)?.value||'').trim();
-  if(!r)return;if(!callStore[id])callStore[id]=[];
-  const dt=nowStr();callStore[id].push({caller:CU.name,date:dt,result:r,note:nt});
-  const c=customers.find(x=>x.id===id);if(c)c.lastMod=dt;
-  openPanel(id);renderRows();toast('📞 Arama kaydedildi — '+RLABELS[r],'blue');
+  if(!r)return;
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addCall',customerId:id,callResult:r,callNote:nt,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
+    await loadCustomers();
+    await openPanel(id);
+    if(document.getElementById('cust-tbody'))renderRows();
+    toast('📞 Arama kaydedildi — '+RLABELS[r],'blue');
+  }catch(e){
+    toast('Bağlantı hatası','red');
+  }
 }
 async function saveNote(id){
   const inp=document.getElementById('ni-'+id);const text=(inp?.value||'').trim();if(!text)return;
-  if(!notesStore[id])notesStore[id]=[];
-  const dt=nowStr();notesStore[id].unshift({text,author:CU.name,date:dt});
-  const c=customers.find(x=>x.id===id);if(c)c.lastMod=dt;
-  inp.value='';
-  const nl=document.getElementById('nl-'+id);
-  if(nl)nl.innerHTML=notesStore[id].map(n=>`<div class="note-item"><div class="note-text">${n.text}</div><div class="note-meta">📝 ${n.author} — ${n.date}</div></div>`).join('');
-  const t=document.querySelector('#ns-'+id+' .ps-title');
-  if(t)t.innerHTML='📝 Notlar <span style="font-weight:400;color:var(--text2)">('+notesStore[id].length+')</span>';
-  document.getElementById('pn-lastmod').textContent='🕐 '+dt;
-  renderRows();toast('✓ Not kaydedildi','green');
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addNote',customerId:id,text,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
+    inp.value='';
+    await loadCustomers();
+    await openPanel(id);
+    if(document.getElementById('cust-tbody'))renderRows();
+    toast('✓ Not kaydedildi','green');
+  }catch(e){
+    toast('Bağlantı hatası','red');
+  }
 }
 function closePanel(){document.getElementById('overlay').classList.remove('open');document.getElementById('detail-panel').classList.remove('open');}
 function openModal(){document.getElementById('add-modal').classList.add('open');}
