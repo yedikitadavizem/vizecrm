@@ -1172,15 +1172,22 @@ function transferCustomer(id){
   toast('✓ '+cust.name+' → '+newRep+' temsilcisine aktarıldı','green');
 }
 
-function deleteCustomer(id, name){
+async function deleteCustomer(id, name){
   if(!confirm(name+' adlı müşteriyi silmek istediğinizden emin misiniz?\nBu işlem geri alınamaz.')){return;}
-  customers = customers.filter(x=>x.id!==id);
-  filtered = filtered.filter(x=>x.id!==id);
-  delete notesStore[id];
-  delete callStore[id];
-  closePanel();
-  renderRows();
-  toast('🗑 '+name+' silindi','red');
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'deleteCustomer',customerId:id,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Silinemedi'),'red');return;}
+    delete notesStore[id];
+    delete callStore[id];
+    await loadCustomers();
+    closePanel();
+    if(document.getElementById('cust-tbody'))renderRows();
+    if(document.getElementById('kanban'))renderPipeline();
+    toast('🗑 '+name+' silindi','red');
+  }catch(e){
+    toast('Bağlantı hatası','red');
+  }
 }
 
 function saveAppt(id){const c=customers.find(x=>x.id===id);if(!c)return;const v=document.getElementById('ap-'+id)?.value;c.apptDate=v||'';c.lastMod=nowStr();openPanel(id);renderRows();toast(v?'📅 Randevu: '+fmtDate(v):'Tarih temizlendi','blue');}
