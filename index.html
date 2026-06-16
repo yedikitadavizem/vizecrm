@@ -104,7 +104,7 @@ async function signInUser(username, password) {
     });
     const data = await res.json();
     if (!res.ok || data.error) return null;
-    return data.user;  // includes super_admin field
+    return data;  // { user, token }
   } catch(e) {
     console.error('Edge Function login hatası:', e);
     return null;
@@ -584,17 +584,19 @@ async function doLogin(){
 
   // Sadece Edge Function / Supabase'den giriş — local fallback yok
   try {
-    user = await signInUser(u, p);
-    if (user) {
+    const result = await signInUser(u, p);
+    if (result && result.user) {
+      const raw = result.user;
       user = {
-        username: user.username,
-        password: user.password_hash,
-        name: user.name,
-        role: user.role,
-        color: user.color || '#2563EB',
-        repName: user.rep_name,
-        id: user.id,
-        superAdmin: user.super_admin || false
+        username: raw.username,
+        password: raw.password_hash,
+        name: raw.name,
+        role: raw.role,
+        color: raw.color || '#2563EB',
+        repName: raw.rep_name,
+        id: raw.id,
+        superAdmin: raw.super_admin || false,
+        token: result.token
       };
     }
   } catch(e) {
@@ -795,7 +797,7 @@ function renderRefunds(){
 // USERS
 async function renderUsers(){
   // Kullanıcıları Edge Function'dan çek
-  const res = await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getUsers'})});
+  const res = await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getUsers',token:CU.token})});
   const data = await res.json();
   const allUsers = data.users || [];
   
@@ -851,7 +853,7 @@ async function renderUsers(){
 async function editPw(un){
   const p=prompt(un+' için yeni şifre:');
   if(!p?.trim())return;
-  const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePassword',username:un,newPassword:p.trim()})});
+  const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePassword',username:un,newPassword:p.trim(),token:CU.token})});
   const d=await res.json();
   if(d.success){toast('✓ '+un+' şifresi güncellendi','green');}
   else{toast('Hata: '+JSON.stringify(d.error),'red');}
@@ -859,7 +861,7 @@ async function editPw(un){
 }
 async function resetPw(un){
   if(!confirm(un+' şifresini "satis123" olarak sıfırlamak istiyor musun?'))return;
-  const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePassword',username:un,newPassword:'satis123'})});
+  const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePassword',username:un,newPassword:'satis123',token:CU.token})});
   const d=await res.json();
   if(d.success){toast('✓ Şifre sıfırlandı: satis123','amber');}
   renderUsers();
@@ -867,7 +869,7 @@ async function resetPw(un){
 async function deleteUser(un){
   if(!CU.superAdmin){toast('Sadece Süper Admin silebilir','red');return;}
   if(!confirm(un+' kullanıcısını silmek istediğine emin misin? Bu işlem geri alınamaz!'))return;
-  const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'deleteUser',username:un})});
+  const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'deleteUser',username:un,token:CU.token})});
   const d=await res.json();
   if(d.success){toast('🗑 '+un+' silindi','red');renderUsers();}
   else{toast('Hata: '+JSON.stringify(d.error),'red');}
@@ -904,7 +906,7 @@ async function saveName(){
   const n=document.getElementById('nd-name').value.trim();
   if(!n||n.length<2){toast('Ad en az 2 karakter','red');return;}
   if(USE_SUPABASE){
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateName',username:CU.username,newName:n})});
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateName',username:CU.username,newName:n,token:CU.token})});
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error),'red');return;}
   }
@@ -922,7 +924,7 @@ async function saveUser(){
   if(USERS.find(u=>u.username===n&&u.username!==CU.username)){toast('Bu kullanıcı adı alınmış','red');return;}
   const oldUsername=CU.username;
   if(USE_SUPABASE){
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateUsername',username:oldUsername,newUsername:n})});
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateUsername',username:oldUsername,newUsername:n,token:CU.token})});
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error),'red');return;}
   }
@@ -941,9 +943,10 @@ async function savePw(){
   const verifyRes = await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'login',username:CU.username,password:cur})});
   const verifyData = await verifyRes.json();
   if(!verifyRes.ok || !verifyData.user){toast('Mevcut şifre hatalı','red');return;}
+  CU.token = verifyData.token; // yeniden giriş doğrulaması yeni bir oturum kartı üretir, güncel tutuyoruz
   // Yeni şifreyi Edge Function ile güncelle
   if(USE_SUPABASE){
-    fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePassword',username:CU.username,newPassword:np})}).then(r=>r.json()).then(d=>{
+    fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePassword',username:CU.username,newPassword:np,token:CU.token})}).then(r=>r.json()).then(d=>{
       if(d.success) toast('✓ Şifre güncellendi — tüm cihazlara yansıdı','green');
       else toast('Hata: '+JSON.stringify(d.error),'red');
     });
