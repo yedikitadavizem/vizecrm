@@ -1035,13 +1035,14 @@ async function openPanel(id){
   document.getElementById('detail-panel').classList.add('open');
   document.getElementById('panel-body').innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div>';
 
-  let notes=[],calls=[],salesReps=[],docMap={};
+  let notes=[],calls=[],salesReps=[],docMap={},history=[];
   try{
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getCustomerDetail',customerId:id,token:CU.token})});
     const d=await res.json();
     notes=(d.notes||[]).map(n=>({text:n.text,author:n.author||'—',date:fmtDT(n.created_at)}));
     calls=(d.calls||[]).map(cl=>({caller:cl.caller||'—',date:fmtDT(cl.created_at),result:cl.result,note:cl.note}));
     (d.documents||[]).forEach(x=>docMap[x.doc_name]=x.status);
+    history=(d.history||[]).map(h=>({l:h.status,m:fmtDT(h.changed_at)+' · '+(h.changed_by||'—')}));
   }catch(e){}
   if(CU.role==='management'){
     try{
@@ -1059,15 +1060,6 @@ async function openPanel(id){
   const rem=c.fee-c.prepay,pct=c.fee>0?Math.round(c.prepay/c.fee*100):0;
   const canMove=CU.role!=='sales'||si<5;
   const next=STAGES[si+1];
-  const tl=[
-    {l:'Dosya oluşturuldu',m:'15 May 2024 · '+c.rep},
-    c.prepay>0?{l:'Ön ödeme: ₺'+c.prepay.toLocaleString('tr-TR'),m:'16 May 2024 · '+c.rep}:null,
-    {l:'Belge talebi gönderildi',m:'17 May 2024 · '+c.ops},
-    si>=9?{l:'Belgeler onaylandı',m:'22 May 2024 · '+c.ops}:null,
-    si>=10?{l:'Randevu arama başlatıldı',m:'23 May 2024 · '+c.ops}:null,
-    si>=11?{l:'Randevu alındı',m:'28 May 2024 · '+c.ops}:null,
-    si>=12?{l:'Başvuru yapıldı',m:'10 Haz 2024 · '+c.ops}:null,
-  ].filter(Boolean);
 
   const qBtns=['Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Teklif Gönderildi','Satış Kapatıldı','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal']
     .map(s=>`<button class="qs-btn ${c.status===s?'active':''}" onclick="moveStatus('${c.id}','${s}')">${s}</button>`).join('');
@@ -1192,7 +1184,7 @@ async function openPanel(id){
   <div class="ps">
     <div class="ps-head"><div class="ps-title">Aşama Geçmişi</div></div>
     <div class="ps-body">
-    ${tl.map(t=>`<div class="tl-item"><div class="tl-dot"></div><div><div class="tl-label">${t.l}</div><div class="tl-meta">${t.m}</div></div></div>`).join('')}
+    ${history.length===0?'<div style="font-size:12px;color:var(--text3)">Henüz kayıt yok</div>':history.map(t=>`<div class="tl-item"><div class="tl-dot"></div><div><div class="tl-label">${t.l}</div><div class="tl-meta">${t.m}</div></div></div>`).join('')}
     </div>
   </div>
 
