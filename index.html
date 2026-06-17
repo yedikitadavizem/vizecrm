@@ -1352,7 +1352,8 @@ function exportExcel(){
   const headers=['Dosya No','Ad Soyad','Telefon','Ülke','Vize Türü','Aşama','Satış Temsilcisi','Oluşturma Tarihi'];
   const rows=customers.map(c=>[c.id,c.name,c.phone,c.country,c.visa,c.status,c.rep,c.created]);
   const csv=[headers,...rows].map(r=>r.map(v=>`"${v||''}"`).join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const BOM = "\uFEFF";
+  const blob=new Blob([BOM+csv],{type:'text/csv;charset=utf-8;'});
   const link=document.createElement('a');
   link.href=URL.createObjectURL(blob);
   link.download=`vizecrm-musteriler-${new Date().toISOString().slice(0,10)}.csv`;
