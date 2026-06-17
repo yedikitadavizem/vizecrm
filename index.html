@@ -181,18 +181,24 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:10px}
 
 /* ===== LOGIN ===== */
-#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;background:var(--bg)}
-.login-card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:40px;width:420px;max-width:100%;box-shadow:0 1px 3px rgba(0,0,0,.05),0 8px 24px rgba(0,0,0,.06)}
-.login-logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
-.login-logo-icon{width:36px;height:36px;border-radius:9px;background:var(--accent);display:flex;align-items:center;justify-content:center;color:#fff;font-size:16px}
-.login-logo-text{font-size:20px;font-weight:800;letter-spacing:-.5px;color:var(--text)}
-.login-sub{font-size:13px;color:var(--text2);margin-bottom:28px}
-.login-lbl{font-size:11px;font-weight:600;color:var(--text2);margin-bottom:5px;display:block;text-transform:uppercase;letter-spacing:.04em}
-.login-inp{width:100%;padding:10px 12px;border:1px solid var(--border2);border-radius:8px;font-size:13px;color:var(--text);background:#fff;outline:none;transition:all .15s;margin-bottom:12px;font-family:inherit}
-.login-inp:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(37,99,235,.1)}
-.login-btn{width:100%;padding:10px;background:var(--accent);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;font-family:inherit;margin-top:4px}
-.login-btn:hover{background:var(--accent-t)}
-.login-err{background:var(--red-bg);border:1px solid #FECACA;color:var(--red);border-radius:8px;padding:10px 12px;font-size:12px;margin-bottom:12px;display:none}
+#login-screen{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;background:linear-gradient(135deg, #0F3460 0%, #16213E 30%, #E94560 70%, #D4145A 100%);position:relative;overflow:hidden}
+#login-screen::before{content:'';position:absolute;top:-50%;right:-10%;width:600px;height:600px;background:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><circle cx="100" cy="100" r="80" fill="none" stroke="%23ffffff" stroke-width="1" opacity="0.1"/><circle cx="100" cy="100" r="60" fill="none" stroke="%23ffffff" stroke-width="1" opacity="0.05"/></svg>') no-repeat center;opacity:0.3;pointer-events:none;border-radius:50%}
+#login-screen::after{content:'';position:absolute;bottom:-30%;left:-5%;width:500px;height:500px;background:url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><circle cx="100" cy="100" r="80" fill="none" stroke="%23ffffff" stroke-width="1" opacity="0.1"/></svg>') no-repeat center;opacity:0.2;pointer-events:none;border-radius:50%}
+.login-card{background:#FFFFFF;border-radius:24px;padding:48px 42px;width:480px;max-width:100%;box-shadow:0 25px 80px rgba(0,0,0,0.25);position:relative;z-index:10;animation:slideUp 0.6s cubic-bezier(0.34, 1.56, 0.64, 1)}
+@keyframes slideUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+.login-logo{display:flex;align-items:center;justify-content:center;flex-direction:column;margin-bottom:28px;gap:0}
+.login-logo-img{width:180px;height:180px;margin-bottom:24px;animation:zoomIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);object-fit:contain}
+@keyframes zoomIn{from{opacity:0;transform:scale(0.8)}to{opacity:1;transform:scale(1)}}
+.login-logo-text{font-size:24px;font-weight:900;letter-spacing:-1.5px;color:#0F3460;margin-bottom:4px}
+.login-tagline{font-size:12px;font-weight:600;color:#E94560;letter-spacing:.05em;text-transform:uppercase;text-align:center}
+.login-sub{font-size:14px;color:#666;margin-bottom:32px;font-weight:500;text-align:center;line-height:1.5}
+.login-lbl{font-size:11px;font-weight:700;color:#0F3460;margin-bottom:7px;display:block;text-transform:uppercase;letter-spacing:.08em}
+.login-inp{width:100%;padding:12px 14px;border:2px solid #E5E7EB;border-radius:10px;font-size:14px;color:#1F2937;background:#FAFBFC;outline:none;transition:all .2s;margin-bottom:14px;font-family:inherit}
+.login-inp:focus{border-color:#E94560;background:#FFF;box-shadow:0 0 0 4px rgba(233,69,96,0.1)}
+.login-inp::placeholder{color:#9CA3AF}
+.login-btn{width:100%;padding:12px;background:linear-gradient(135deg, #0F3460 0%, #16213E 100%);color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;margin-top:8px;text-transform:uppercase;letter-spacing:.03em;box-shadow:0 4px 15px rgba(15,52,96,0.2)}
+.login-btn:hover{transform:translateY(-2px);box-shadow:0 6px 20px rgba(15,52,96,0.3)}
+.login-err{background:#FEE2E2;border:2px solid #E94560;color:#991B1B;border-radius:10px;padding:12px 14px;font-size:13px;margin-bottom:14px;display:none;font-weight:500}
 .divider{height:1px;background:var(--border);margin:20px 0}
 
 
@@ -431,19 +437,18 @@ if (localStorage.getItem('vizecrm_token')) {
 <!-- LOGIN -->
 <div id="login-screen">
   <div class="login-card">
-    <div class="login-logo"><div class="login-logo-icon">✈</div><div class="login-logo-text">VizeCRM</div></div>
+    <div class="login-logo">
+      <img class="login-logo-img" src="https://raw.githubusercontent.com/Canaltay1/vizecrm/main/logo.png" alt="VizeCRM">
+      <div class="login-logo-text">VizeCRM</div>
+      <div class="login-tagline">YEDİ KITADA VİZEM</div>
+    </div>
     <div class="login-sub">Vize Danışmanlık Yönetim Sistemi</div>
-    <div id="supabase-banner" style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#92400E;display:none">
-  ⚠️ <strong>Demo Mod:</strong> Supabase bağlantısı yok. Veriler geçici.
-  Supabase kurulduktan sonra SUPABASE_URL ve SUPABASE_KEY'i dosyanın üstüne ekleyin.
-</div>
-<div class="login-err" id="lerr">Kullanıcı adı veya şifre hatalı.</div>
+    <div class="login-err" id="lerr">Kullanıcı adı veya şifre hatalı.</div>
     <label class="login-lbl">Kullanıcı Adı</label>
     <input class="login-inp" id="lu" placeholder="kullanici_adi" onkeydown="if(event.key==='Enter')doLogin()">
     <label class="login-lbl">Şifre</label>
     <input class="login-inp" type="password" id="lp" placeholder="••••••••" onkeydown="if(event.key==='Enter')doLogin()">
     <button class="login-btn" onclick="doLogin()">Giriş Yap →</button>
-
   </div>
 </div>
 
@@ -706,7 +711,19 @@ async function showPage(p){
   if(p==='dashboard'||p==='customers'||p==='pipeline'||p==='refunds')await loadCustomers();
   await ({dashboard:renderDash,customers:renderCusts,pipeline:renderPipeline,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
 }
-function gSearch(q){const sq=q.toLowerCase();filtered=customers.filter(c=>c.name.toLowerCase().includes(sq)||c.id.toLowerCase().includes(sq)||c.phone.includes(sq));if(document.getElementById('cust-tbody'))renderRows();}
+function gSearch(q){
+  const sq=q.toLowerCase().trim();
+  if(!sq){
+    filtered=[...customers];
+  }else{
+    filtered=customers.filter(c=>
+      (c.name&&c.name.toLowerCase().includes(sq))||
+      (c.id&&c.id.toLowerCase().includes(sq))||
+      (c.phone&&c.phone.includes(sq))
+    );
+  }
+  renderRows();
+}
 
 // DASHBOARD
 const PRESALE_STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Teklif Gönderildi'];
