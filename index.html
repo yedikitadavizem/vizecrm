@@ -1065,13 +1065,14 @@ async function openPanel(id){
     documents.forEach(x=>docMap[x.doc_name]=x.status);
     history=(d.history||[]).map(h=>({l:h.status,m:fmtDT(h.changed_at)+' · '+(h.changed_by||'—')}));
   }catch(e){}
-  if(CU.role==='management'){
+  if(CU.role==='management' && !window.salesRepCache){
     try{
       const res2=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getUsers',token:CU.token})});
       const d2=await res2.json();
-      salesReps=(d2.users||[]).filter(u=>u.role==='sales');
+      window.salesRepCache=(d2.users||[]).filter(u=>u.role==='sales');
     }catch(e){}
   }
+  if(window.salesRepCache) salesReps=window.salesRepCache;
   const reached=calls.filter(x=>x.result==='ulasildi').length;
 
   const si=STAGES.indexOf(c.status);
