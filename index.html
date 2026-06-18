@@ -262,6 +262,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 
 /* ===== STAT CARDS ===== */
 .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:24px}
+.stats-grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:16px;margin-bottom:24px}
 .stat-card{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;position:relative}
 .stat-card::after{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
 .stat-card.c-blue::after{background:var(--accent)}
@@ -430,7 +431,7 @@ textarea.fi2{resize:vertical}
 /* ===== TOAST ===== */
 .toast-wrap{position:fixed;bottom:24px;right:24px;z-index:1000;display:flex;flex-direction:column;gap:8px}
 
-@media(max-width:900px){.stats-grid{grid-template-columns:repeat(2,1fr)}.charts-grid{grid-template-columns:1fr}}
+@media(max-width:900px){.stats-grid,.stats-grid-5{grid-template-columns:repeat(2,1fr)}.charts-grid{grid-template-columns:1fr}}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
@@ -604,6 +605,7 @@ async function loadCustomers(){
       status:r.status,fee:r.service_fee||0,prepay:r.prepayment||0,
       days:r.last_modified_at?Math.max(0,Math.floor((Date.now()-new Date(r.last_modified_at).getTime())/86400000)):0,
       lastMod:fmtDT(r.last_modified_at),
+      created:r.created_at||null,lastModRaw:r.last_modified_at||null,
       apptDate:r.appt_date||'',
       refundStatus:r.refund_status||false,refundAmount:r.refund_amount||0,refundReason:r.refund_reason||'',refundDate:r.refund_date||'',
       callTotal:r.call_total||0,callReached:r.call_reached||0
@@ -785,27 +787,122 @@ function barsHTML(list,max,colors){
 }
 
 function renderDash(){
-  const all=customers;
+  document.getElementById('main-content').innerHTML=`<div id="dash-filterbar"></div><div id="dash-body"></div>`;
+  renderDashFilterBar();
+  renderDashBody();
+}
+
+// ---- DASHBOARD FİLTRELERİ (dönem / temsilci / ülke) ----
+let dashPeriod='all', dashRep='', dashCountry='';
+const DASH_PERIODS=[['all','Tüm Zamanlar'],['today','Bugün'],['week','Bu Hafta'],['month','Bu Ay'],['quarter','Bu Çeyrek'],['year','Bu Yıl']];
+
+function inDashPeriod(c,period){
+  if(period==='all')return true;
+  if(!c.created)return false;
+  const d=new Date(c.created),now=new Date();
+  if(period==='today')return d.toDateString()===now.toDateString();
+  if(period==='week'){
+    const dow=now.getDay(); const diffToMon=dow===0?6:dow-1;
+    const start=new Date(now); start.setDate(now.getDate()-diffToMon); start.setHours(0,0,0,0);
+    return d>=start;
+  }
+  if(period==='month')return d.getFullYear()===now.getFullYear()&&d.getMonth()===now.getMonth();
+  if(period==='quarter')return d.getFullYear()===now.getFullYear()&&Math.floor(d.getMonth()/3)===Math.floor(now.getMonth()/3);
+  if(period==='year')return d.getFullYear()===now.getFullYear();
+  return true;
+}
+function getDashFiltered(){
+  return customers.filter(c=>inDashPeriod(c,dashPeriod)&&(!dashRep||c.rep===dashRep)&&(!dashCountry||c.country===dashCountry));
+}
+function renderDashFilterBar(){
+  const reps=[...new Set(customers.map(c=>c.rep).filter(r=>r&&r!=='—'))].sort();
+  const countries=[...new Set(customers.map(c=>c.country).filter(Boolean))].sort();
+  const active=dashPeriod!=='all'||dashRep||dashCountry;
+  document.getElementById('dash-filterbar').innerHTML=`
+  <div class="filter-bar">
+    <select class="sel" onchange="dashPeriod=this.value;renderDashBody()">
+      ${DASH_PERIODS.map(([v,l])=>`<option value="${v}" ${dashPeriod===v?'selected':''}>${l}</option>`).join('')}
+    </select>
+    <select class="sel" onchange="dashRep=this.value;renderDashBody()">
+      <option value="">Tüm Temsilciler</option>
+      ${reps.map(r=>`<option value="${r}" ${dashRep===r?'selected':''}>${r}</option>`).join('')}
+    </select>
+    <select class="sel" onchange="dashCountry=this.value;renderDashBody()">
+      <option value="">Tüm Ülkeler</option>
+      ${countries.map(c=>`<option value="${c}" ${dashCountry===c?'selected':''}>${c}</option>`).join('')}
+    </select>
+    ${active?`<button class="btn btn-ghost btn-sm" onclick="dashPeriod='all';dashRep='';dashCountry='';renderDash()">✕ Filtreleri Temizle</button>`:''}
+  </div>`;
+}
+
+// ---- ORTALAMA SATIŞ SÜRESİ ----
+function avgSalesCycleDays(list){
+  const done=list.filter(c=>c.status==='Tamamlandı'&&c.created&&c.lastModRaw);
+  if(!done.length)return null;
+  const total=done.reduce((s,c)=>s+Math.max(0,(new Date(c.lastModRaw).getTime()-new Date(c.created).getTime())/86400000),0);
+  return {avg:Math.round(total/done.length),count:done.length};
+}
+
+// ---- DÖNÜŞÜM HUNİSİ ----
+const FUNNEL_STAGES=['Yeni Kayıt','İletişime Geçildi','Teklif Gönderildi','Satış Kapatıldı','Tamamlandı'];
+const FUNNEL_COLORS=['#6B7280','#2563EB','#7C3AED','#D97706','#059669'];
+function funnelHTML(list){
+  const nonCancelled=list.filter(c=>c.status!=='İptal');
+  const counts=FUNNEL_STAGES.map(stage=>{
+    const idx=STAGES.indexOf(stage);
+    return nonCancelled.filter(c=>STAGES.indexOf(c.status)>=idx).length;
+  });
+  const top=counts[0]||0;
+  const cancelledCount=list.filter(c=>c.status==='İptal').length;
+  if(!list.length)return `<div class="chart-card"><div class="chart-title">Dönüşüm Hunisi</div><div style="font-size:12px;color:var(--text3);padding:8px 0">Henüz veri yok</div></div>`;
+  return `<div class="chart-card" style="margin-bottom:20px">
+    <div class="chart-title">Dönüşüm Hunisi <span style="font-weight:400;color:var(--text3);font-size:11px">— "Yeni Kayıt"tan en az bu aşamaya ulaşmış müşteri sayısı</span></div>
+    ${FUNNEL_STAGES.map((stage,i)=>{
+      const c=counts[i],pct=top?Math.round(c/top*100):0,w=top?Math.max(10,pct):10;
+      return `<div class="bar-row"><div class="bar-lbl" style="min-width:130px;text-align:left">${stage}</div><div class="bar-track"><div class="bar-fill" style="width:${w}%;background:${FUNNEL_COLORS[i]}"></div></div><div class="bar-val" style="min-width:70px">${c} (%${pct})</div></div>`;
+    }).join('')}
+    ${cancelledCount?`<div style="font-size:11px;color:var(--red);margin-top:6px">↳ ${cancelledCount} müşteri süreç içinde iptal oldu</div>`:''}
+  </div>`;
+}
+
+// ---- BEKLEYEN DOSYALAR PANELİ ----
+function staleFilesPanelHTML(staleList){
+  if(!staleList.length)return'';
+  const top=[...staleList].sort((a,b)=>b.days-a.days).slice(0,6);
+  return `<div class="tbl-wrap" style="margin-bottom:20px">
+    <div class="tbl-toolbar"><div class="tbl-label">⚠️ Bekleyen Dosyalar (7+ gün)</div><span style="font-size:11px;color:var(--text2)">${staleList.length} dosya — en eski ${top.length} tanesi</span></div>
+    <table class="tbl"><tbody>
+    ${top.map(c=>`<tr onclick="openPanel('${c.id}')"><td><b>${c.name}</b></td><td><span class="badge ${SCLS[c.status]||'b-lead'}">${c.status}</span></td><td style="color:var(--red);font-weight:700">${c.days} gün</td><td>${c.rep}</td><td><a class="phone-link" href="tel:${c.phone}" onclick="event.stopPropagation()">${c.phone}</a></td></tr>`).join('')}
+    </tbody></table>
+  </div>`;
+}
+
+function renderDashBody(){
+  const all=getDashFiltered();
   const activeCount=all.filter(c=>c.status!=='Tamamlandı'&&c.status!=='İptal').length;
   const totalCollected=all.reduce((s,c)=>s+(c.prepay||0),0);
   const pendingList=all.filter(c=>(c.fee||0)-(c.prepay||0)>0);
   const pendingTotal=pendingList.reduce((s,c)=>s+((c.fee||0)-(c.prepay||0)),0);
   const cancelledCount=all.filter(c=>c.status==='İptal').length;
   const staleList=all.filter(c=>c.days>7&&c.status!=='Tamamlandı'&&c.status!=='İptal');
+  const cycle=avgSalesCycleDays(all);
 
   const byCountry=topGroups(all,c=>c.country);
   const byRep=topGroups(all.filter(c=>!PRESALE_STAGES.includes(c.status)&&c.status!=='İptal'),c=>c.rep);
   const byStatus=topGroups(all,c=>c.status);
   const byVisa=topGroups(all,c=>c.visa);
 
-  document.getElementById('main-content').innerHTML=`
-  <div class="stats-grid">
+  document.getElementById('dash-body').innerHTML=`
+  <div class="stats-grid-5">
     <div class="stat-card c-green"><div class="stat-icon" style="background:var(--green-bg);color:var(--green)">💰</div><div class="stat-val" style="color:var(--green)">${fmtTL(totalCollected)}</div><div class="stat-label">Toplam Tahsilat</div></div>
     <div class="stat-card c-amber"><div class="stat-icon" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div class="stat-val" style="color:var(--amber)">${fmtTL(pendingTotal)}</div><div class="stat-label">Bekleyen Tahsilat</div><div class="stat-trend" style="color:var(--text2)">${pendingList.length} müşteride kalan</div></div>
     <div class="stat-card c-blue"><div class="stat-icon" style="background:var(--accent-l);color:var(--accent)">📂</div><div class="stat-val" style="color:var(--accent)">${activeCount}</div><div class="stat-label">Aktif Başvuru</div></div>
     <div class="stat-card c-red"><div class="stat-icon" style="background:var(--red-bg);color:var(--red)">✕</div><div class="stat-val" style="color:var(--red)">${cancelledCount}</div><div class="stat-label">İptal Edilen</div></div>
+    <div class="stat-card c-blue"><div class="stat-icon" style="background:var(--accent-l);color:var(--accent)">⏱</div><div class="stat-val" style="color:var(--accent)">${cycle?cycle.avg+' gün':'—'}</div><div class="stat-label">Ort. Satış Süresi</div><div class="stat-trend" style="color:var(--text2)">${cycle?cycle.count+' tamamlanan dosyada':'henüz tamamlanan yok'}</div></div>
   </div>
   ${staleList.length?`<div class="alert alert-red"><div style="display:flex;align-items:center;gap:10px"><span>⚠️</span><div><div style="font-size:13px;font-weight:600;color:var(--red)">${staleList.length} dosya 7+ gün aynı aşamada bekliyor</div><div style="font-size:11px;color:var(--text2);margin-top:1px">Bekleyen dosyalar iade riskini artırır</div></div></div><button class="btn btn-danger btn-sm" onclick="showPage('customers')">Görüntüle →</button></div>`:''}
+  ${staleFilesPanelHTML(staleList)}
+  ${funnelHTML(all)}
   <div class="charts-grid">
     <div class="chart-card"><div class="chart-title">Ülkeye Göre Dağılım</div>${barsHTML(byCountry.list,byCountry.max,['var(--accent)','var(--purple)','var(--green)','var(--amber)'])}</div>
     <div class="chart-card"><div class="chart-title">Temsilci Performansı (Satışı Kapanan)</div>${barsHTML(byRep.list,byRep.max,['#2563EB','#D97706','#059669','#DC2626'])}</div>
