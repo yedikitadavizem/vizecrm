@@ -579,8 +579,8 @@ if (localStorage.getItem('vizecrm_token')) {
 const USERS=[];
 let CU=null;
 
-const STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Teklif Gönderildi','Satış Kapatıldı','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'];
-const SCLS={'Yeni Kayıt':'b-lead','Sonra Ara':'b-callback','Ulaşılamıyor':'b-unreachable','İlgilenmiyor':'b-notinterested','İletişime Geçildi':'b-contacted','Teklif Gönderildi':'b-proposal','Satış Kapatıldı':'b-sale','Ödeme Alındı':'b-payment','Belge Bekleniyor':'b-docs-pending','Belgeler Tamam':'b-docs-done','Randevu Aranıyor':'b-appt-search','Randevu Alındı':'b-appt-sched','Başvuru Yapıldı':'b-submitted','Sonuç Bekleniyor':'b-waiting','Tamamlandı':'b-completed','İptal':'b-cancelled'};
+const STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'];
+const SCLS={'Yeni Kayıt':'b-lead','Sonra Ara':'b-callback','Ulaşılamıyor':'b-unreachable','İlgilenmiyor':'b-notinterested','İletişime Geçildi':'b-contacted','Ödeme Alındı':'b-payment','Belge Bekleniyor':'b-docs-pending','Belgeler Tamam':'b-docs-done','Randevu Aranıyor':'b-appt-search','Randevu Alındı':'b-appt-sched','Başvuru Yapıldı':'b-submitted','Sonuç Bekleniyor':'b-waiting','Tamamlandı':'b-completed','İptal':'b-cancelled'};
 const MONTHS=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 const RCOLS={'Ece Aydın':'#2563EB','Mehmet Kaya':'#D97706','Ayşe Türk':'#059669','Burak Sarı':'#DC2626','Ceren Yılmaz':'#0891B2','Onur Demir':'#7C3AED','Zehra Kaya':'#0D9488'};
 // Notlar ve aramalar artık customer_notes / customer_calls tablolarından geliyor
@@ -741,7 +741,10 @@ async function initApp(){
     <div class="tb-search" id="tb-search-wrap"><span>🔍</span><input placeholder="Müşteri ara..." oninput="gSearch(this.value)"></div>
     <button class="btn btn-primary" onclick="openModal()">+ Yeni Müşteri</button>
   `;
-  isM?await showPage('dashboard'):await showPage('customers');
+  const allowedPages=isM?['dashboard','customers','pipeline','refunds','users','account']:['customers','pipeline','account'];
+  const savedPage=localStorage.getItem('vizecrm_lastpage');
+  const startPage=(savedPage&&allowedPages.includes(savedPage))?savedPage:(isM?'dashboard':'customers');
+  await showPage(startPage);
 }
 
 const PTITLES={dashboard:'Dashboard',customers:'Müşteriler',pipeline:'Pipeline',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
@@ -750,6 +753,7 @@ async function showPage(p){
   document.getElementById('page-title').textContent=PTITLES[p]||p;
   document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
   document.querySelector('[onclick="showPage(\''+p+'\')"]')?.classList.add('active');
+  localStorage.setItem('vizecrm_lastpage',p);
   const searchWrap=document.getElementById('tb-search-wrap');
   if(searchWrap)searchWrap.style.display=(p==='dashboard')?'none':'';
   if(p==='dashboard'||p==='customers'||p==='pipeline'||p==='refunds')await loadCustomers();
@@ -774,7 +778,7 @@ function gSearch(q){
 }
 
 // DASHBOARD
-const PRESALE_STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Teklif Gönderildi'];
+const PRESALE_STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi'];
 function fmtTL(n){
   n=n||0;
   if(n>=1000000)return '₺'+(n/1000000).toFixed(2)+'M';
@@ -851,7 +855,7 @@ function avgSalesCycleDays(list){
 }
 
 // ---- DÖNÜŞÜM HUNİSİ ----
-const FUNNEL_STAGES=['Yeni Kayıt','İletişime Geçildi','Teklif Gönderildi','Satış Kapatıldı','Tamamlandı'];
+const FUNNEL_STAGES=['Yeni Kayıt','İletişime Geçildi','Ödeme Alındı','Randevu Alındı','Tamamlandı'];
 const FUNNEL_COLORS=['#6B7280','#2563EB','#7C3AED','#D97706','#059669'];
 function funnelHTML(list){
   const nonCancelled=list.filter(c=>c.status!=='İptal');
@@ -926,7 +930,7 @@ function renderCusts(){
     <select class="sel" onchange="fS(this.value)">
       <option value="">Tüm aşamalar</option>
       <optgroup label="📞 İletişim"><option>Yeni Kayıt</option><option>Sonra Ara</option><option>Ulaşılamıyor</option><option>İlgilenmiyor</option><option>İletişime Geçildi</option></optgroup>
-      <optgroup label="💼 Satış"><option>Teklif Gönderildi</option><option>Satış Kapatıldı</option><option>Ödeme Alındı</option></optgroup>
+      <optgroup label="💼 Satış"><option>Ödeme Alındı</option></optgroup>
       <optgroup label="📋 Operasyon"><option>Belge Bekleniyor</option><option>Belgeler Tamam</option><option>Randevu Aranıyor</option><option>Randevu Alındı</option><option>Başvuru Yapıldı</option><option>Sonuç Bekleniyor</option></optgroup>
       <optgroup label="✅ Sonuç"><option>Tamamlandı</option><option>İptal</option></optgroup>
     </select>
@@ -974,8 +978,8 @@ function fS(s){filtered=s?customers.filter(c=>c.status===s):[...customers];rende
 function fCo(s){filtered=s?customers.filter(c=>c.country===s):[...customers];renderRows();}
 
 // PIPELINE
-const KSTAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Teklif Gönderildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı'];
-const KCOLS={'Yeni Kayıt':'#6B7280','Sonra Ara':'#2563EB','Ulaşılamıyor':'#7C3AED','İlgilenmiyor':'#4B5563','İletişime Geçildi':'#2563EB','Teklif Gönderildi':'#7C3AED','Ödeme Alındı':'#059669','Belge Bekleniyor':'#D97706','Belgeler Tamam':'#059669','Randevu Aranıyor':'#D97706','Randevu Alındı':'#2563EB','Başvuru Yapıldı':'#7C3AED','Sonuç Bekleniyor':'#D97706','Tamamlandı':'#059669'};
+const KSTAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı'];
+const KCOLS={'Yeni Kayıt':'#6B7280','Sonra Ara':'#2563EB','Ulaşılamıyor':'#7C3AED','İlgilenmiyor':'#4B5563','İletişime Geçildi':'#2563EB','Ödeme Alındı':'#059669','Belge Bekleniyor':'#D97706','Belgeler Tamam':'#059669','Randevu Aranıyor':'#D97706','Randevu Alındı':'#2563EB','Başvuru Yapıldı':'#7C3AED','Sonuç Bekleniyor':'#D97706','Tamamlandı':'#059669'};
 
 function renderPipeline(){
   const mc=document.getElementById('main-content');
@@ -1281,7 +1285,7 @@ async function openPanel(id){
   const canMove=CU.role!=='sales'||si<5;
   const next=STAGES[si+1];
 
-  const qBtns=['Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Teklif Gönderildi','Satış Kapatıldı','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal']
+  const qBtns=['Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal']
     .map(s=>`<button class="qs-btn ${c.status===s?'active':''}" onclick="moveStatus('${c.id}','${s}')">${s}</button>`).join('');
 
   document.getElementById('panel-body').innerHTML=`
