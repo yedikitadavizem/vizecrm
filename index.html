@@ -857,6 +857,65 @@ function avgSalesCycleDays(list){
 // ---- DÖNÜŞÜM HUNİSİ ----
 const FUNNEL_STAGES=['Yeni Kayıt','İletişime Geçildi','Ödeme Alındı','Randevu Alındı','Tamamlandı'];
 const FUNNEL_COLORS=['#6B7280','#2563EB','#7C3AED','#D97706','#059669'];
+// ---- OPERASYONEL UYARILAR ----
+const WARN_SALES_S=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi'];
+const WARN_EVRAK_S=['Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor'];
+const WARN_RANDEVU_S=['Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor'];
+
+function buildWarningsHTML(){
+  const warnings=[];
+  for(const c of customers){
+    if(c.status==='Tamamlandı'||c.status==='İptal') continue;
+    const d=c.days;
+    if(WARN_SALES_S.includes(c.status)){
+      if(d>=3) warnings.push({level:'crit',c,msg:`${d} gündür güncellenmedi`,dept:'Satış',icon:'🔴'});
+      else if(d>=2) warnings.push({level:'warn',c,msg:`${d} gündür güncellenmedi`,dept:'Satış',icon:'⚠️'});
+    } else if(WARN_EVRAK_S.includes(c.status)){
+      if(c.status==='Randevu Aranıyor'&&d>=14) warnings.push({level:'crit',c,msg:`${d} gündür randevu alınamıyor`,dept:'Evrak',icon:'🔴'});
+      else if(d>=14) warnings.push({level:'crit',c,msg:`${d} gündür güncellenmedi`,dept:'Evrak',icon:'🔴'});
+      else if(d>=7) warnings.push({level:'warn',c,msg:`${d} gündür güncellenmedi`,dept:'Evrak',icon:'⚠️'});
+    } else if(WARN_RANDEVU_S.includes(c.status)){
+      if(d>=14) warnings.push({level:'crit',c,msg:`${d} gündür güncellenmedi`,dept:'Randevu',icon:'🔴'});
+      else if(d>=7) warnings.push({level:'warn',c,msg:`${d} gündür güncellenmedi`,dept:'Randevu',icon:'⚠️'});
+    }
+  }
+  warnings.sort((a,b)=>{
+    if(a.level!==b.level) return a.level==='crit'?-1:1;
+    return b.c.days-a.c.days;
+  });
+  if(!warnings.length) return `
+  <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:20px;display:flex;align-items:center;gap:10px">
+    <span style="font-size:18px">✅</span>
+    <div>
+      <div style="font-size:13px;font-weight:600;color:var(--green)">Operasyonel Uyarı Yok</div>
+      <div style="font-size:11px;color:var(--text3);margin-top:2px">Tüm dosyalar zamanında güncelleniyor</div>
+    </div>
+  </div>`;
+  const crits=warnings.filter(w=>w.level==='crit');
+  const warns=warnings.filter(w=>w.level==='warn');
+  return `
+  <div style="background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px">
+    <div style="padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+      <div style="font-size:13px;font-weight:600">🔔 Operasyonel Uyarılar</div>
+      <div style="display:flex;gap:8px">
+        ${crits.length?`<span class="badge b-cancelled" style="font-size:11px">🔴 ${crits.length} Kritik</span>`:''}
+        ${warns.length?`<span class="badge b-docs-pending" style="font-size:11px">⚠️ ${warns.length} Uyarı</span>`:''}
+      </div>
+    </div>
+    ${warnings.map(w=>`
+    <div onclick="openPanel('${w.c.id}')" style="display:flex;align-items:center;gap:12px;padding:10px 18px;border-bottom:1px solid var(--border);cursor:pointer;background:${w.level==='crit'?'#FEF2F2':'#FFFBEB'}" onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+      <div style="width:7px;height:7px;border-radius:50%;flex-shrink:0;background:${w.level==='crit'?'var(--red)':'var(--amber)'}"></div>
+      <div style="flex:1;min-width:0">
+        <span style="font-weight:600;font-size:12px;color:var(--text)">${w.c.name}</span>
+        <span style="font-size:11px;color:var(--text2);margin-left:8px">${w.msg}</span>
+      </div>
+      <span class="badge ${SCLS[w.c.status]||'b-lead'}" style="font-size:10px;flex-shrink:0">${w.c.status}</span>
+      <span style="font-size:10px;color:var(--text3);flex-shrink:0;min-width:60px;text-align:right">${w.c.rep.split(' ')[0]}</span>
+      <span style="font-size:10px;padding:2px 8px;border-radius:20px;font-weight:700;flex-shrink:0;background:${w.level==='crit'?'var(--red-bg)':'var(--amber-bg)'};color:${w.level==='crit'?'var(--red)':'var(--amber)'}">${w.level==='crit'?'KRİTİK':'UYARI'}</span>
+    </div>`).join('')}
+  </div>`;
+}
+
 function funnelHTML(list){
   const nonCancelled=list.filter(c=>c.status!=='İptal');
   const counts=FUNNEL_STAGES.map(stage=>{
@@ -912,7 +971,7 @@ function renderDashBody(){
     <div class="stat-card c-blue"><div class="stat-icon" style="background:var(--accent-l);color:var(--accent)">⏱</div><div class="stat-val" style="color:var(--accent)">${cycle?cycle.avg+' gün':'—'}</div><div class="stat-label">Ort. Satış Süresi</div><div class="stat-trend" style="color:var(--text2)">${cycle?cycle.count+' tamamlanan dosyada':'henüz tamamlanan yok'}</div></div>
   </div>
   ${staleList.length?`<div class="alert alert-red"><div style="display:flex;align-items:center;gap:10px"><span>⚠️</span><div><div style="font-size:13px;font-weight:600;color:var(--red)">${staleList.length} dosya 7+ gün aynı aşamada bekliyor</div><div style="font-size:11px;color:var(--text2);margin-top:1px">Bekleyen dosyalar iade riskini artırır</div></div></div><button class="btn btn-danger btn-sm" onclick="showPage('customers')">Görüntüle →</button></div>`:''}
-  ${staleFilesPanelHTML(staleList)}
+  ${buildWarningsHTML()}
   ${funnelHTML(all)}
   <div class="charts-grid">
     <div class="chart-card"><div class="chart-title">Ülkeye Göre Dağılım</div>${barsHTML(byCountry.list,byCountry.max,['var(--accent)','var(--purple)','var(--green)','var(--amber)'])}</div>
