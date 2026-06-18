@@ -765,7 +765,11 @@ function gSearch(q){
       (c.phone&&c.phone.includes(sq))
     );
   }
-  renderRows();
+  if(document.getElementById('cust-tbody')){
+    renderRows();
+  }else if(document.getElementById('kanban')){
+    renderPipeline();
+  }
 }
 
 // DASHBOARD
