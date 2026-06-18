@@ -1285,8 +1285,14 @@ async function openPanel(id){
   const canMove=CU.role!=='sales'||si<5;
   const next=STAGES[si+1];
 
-  const qBtns=['Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal']
-    .map(s=>`<button class="qs-btn ${c.status===s?'active':''}" onclick="moveStatus('${c.id}','${s}')">${s}</button>`).join('');
+  const ROLE_QBTNS={
+    sales:['Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı'],
+    evrak:['Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı'],
+    randevu:['Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'],
+    management:['Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'],
+  };
+  const qBtnList=ROLE_QBTNS[CU.role]||ROLE_QBTNS.management;
+  const qBtns=qBtnList.map(s=>`<button class="qs-btn ${c.status===s?'active':''}" onclick="moveStatus('${c.id}','${s}')">${s}</button>`).join('');
 
   document.getElementById('panel-body').innerHTML=`
   <div class="ps">
