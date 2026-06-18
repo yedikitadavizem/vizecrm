@@ -579,8 +579,8 @@ if (localStorage.getItem('vizecrm_token')) {
 const USERS=[];
 let CU=null;
 
-const STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'];
-const SCLS={'Yeni Kayıt':'b-lead','Sonra Ara':'b-callback','Ulaşılamıyor':'b-unreachable','İlgilenmiyor':'b-notinterested','İletişime Geçildi':'b-contacted','Ödeme Alındı':'b-payment','Belge Bekleniyor':'b-docs-pending','Belgeler Tamam':'b-docs-done','Randevu Aranıyor':'b-appt-search','Randevu Alındı':'b-appt-sched','Başvuru Yapıldı':'b-submitted','Sonuç Bekleniyor':'b-waiting','Tamamlandı':'b-completed','İptal':'b-cancelled'};
+const STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'];
+const SCLS={'Yeni Kayıt':'b-lead','Sonra Ara':'b-callback','Ulaşılamıyor':'b-unreachable','İlgilenmiyor':'b-notinterested','İletişime Geçildi':'b-contacted','Ödeme Alındı':'b-payment','Belge Bekleniyor':'b-docs-pending','Belgeler Tamam':'b-docs-done','Randevu Aranıyor':'b-appt-search','Randevu Alındı':'b-appt-sched','Randevu Evrakları Hazırlanıyor':'b-docs-pending','Randevu Evrakları Tamamlandı':'b-docs-done','Başvuru Yapıldı':'b-submitted','Sonuç Bekleniyor':'b-waiting','Tamamlandı':'b-completed','İptal':'b-cancelled'};
 const MONTHS=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 const RCOLS={'Ece Aydın':'#2563EB','Mehmet Kaya':'#D97706','Ayşe Türk':'#059669','Burak Sarı':'#DC2626','Ceren Yılmaz':'#0891B2','Onur Demir':'#7C3AED','Zehra Kaya':'#0D9488'};
 // Notlar ve aramalar artık customer_notes / customer_calls tablolarından geliyor
@@ -931,7 +931,7 @@ function renderCusts(){
       <option value="">Tüm aşamalar</option>
       <optgroup label="📞 İletişim"><option>Yeni Kayıt</option><option>Sonra Ara</option><option>Ulaşılamıyor</option><option>İlgilenmiyor</option><option>İletişime Geçildi</option></optgroup>
       <optgroup label="💼 Satış"><option>Ödeme Alındı</option></optgroup>
-      <optgroup label="📋 Operasyon"><option>Belge Bekleniyor</option><option>Belgeler Tamam</option><option>Randevu Aranıyor</option><option>Randevu Alındı</option><option>Başvuru Yapıldı</option><option>Sonuç Bekleniyor</option></optgroup>
+      <optgroup label="📋 Operasyon"><option>Belge Bekleniyor</option><option>Belgeler Tamam</option><option>Randevu Aranıyor</option><option>Randevu Alındı</option><option>Randevu Evrakları Hazırlanıyor</option><option>Randevu Evrakları Tamamlandı</option><option>Başvuru Yapıldı</option><option>Sonuç Bekleniyor</option></optgroup>
       <optgroup label="✅ Sonuç"><option>Tamamlandı</option><option>İptal</option></optgroup>
     </select>
     <select class="sel" onchange="fCo(this.value)">
@@ -978,8 +978,8 @@ function fS(s){filtered=s?customers.filter(c=>c.status===s):[...customers];rende
 function fCo(s){filtered=s?customers.filter(c=>c.country===s):[...customers];renderRows();}
 
 // PIPELINE
-const KSTAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı'];
-const KCOLS={'Yeni Kayıt':'#6B7280','Sonra Ara':'#2563EB','Ulaşılamıyor':'#7C3AED','İlgilenmiyor':'#4B5563','İletişime Geçildi':'#2563EB','Ödeme Alındı':'#059669','Belge Bekleniyor':'#D97706','Belgeler Tamam':'#059669','Randevu Aranıyor':'#D97706','Randevu Alındı':'#2563EB','Başvuru Yapıldı':'#7C3AED','Sonuç Bekleniyor':'#D97706','Tamamlandı':'#059669'};
+const KSTAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı'];
+const KCOLS={'Yeni Kayıt':'#6B7280','Sonra Ara':'#2563EB','Ulaşılamıyor':'#7C3AED','İlgilenmiyor':'#4B5563','İletişime Geçildi':'#2563EB','Ödeme Alındı':'#059669','Belge Bekleniyor':'#D97706','Belgeler Tamam':'#059669','Randevu Aranıyor':'#D97706','Randevu Alındı':'#2563EB','Randevu Evrakları Hazırlanıyor':'#D97706','Randevu Evrakları Tamamlandı':'#059669','Başvuru Yapıldı':'#7C3AED','Sonuç Bekleniyor':'#D97706','Tamamlandı':'#059669'};
 
 function renderPipeline(){
   const mc=document.getElementById('main-content');
@@ -1278,14 +1278,14 @@ async function openPanel(id){
   const reached=calls.filter(x=>x.result==='ulasildi').length;
 
   const si=STAGES.indexOf(c.status);
-  const rel=['Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı'];
+  const rel=['Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı'];
   const prog=rel.map(s=>{const i=STAGES.indexOf(s),done=si>i,cur=si===i;return`<div class="prog-step"><div class="pi ${done?'pi-done':cur?'pi-cur':'pi-pend'}">${done?'✓':cur?'→':'○'}</div><div class="p-label ${done?'pl-done':cur?'pl-cur':'pl-pend'}">${s}</div></div>`;}).join('');
 
   const rem=c.fee-c.prepay,pct=c.fee>0?Math.round(c.prepay/c.fee*100):0;
   const canMove=CU.role!=='sales'||si<5;
   const next=STAGES[si+1];
 
-  const qBtns=['Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal']
+  const qBtns=['Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal']
     .map(s=>`<button class="qs-btn ${c.status===s?'active':''}" onclick="moveStatus('${c.id}','${s}')">${s}</button>`).join('');
 
   document.getElementById('panel-body').innerHTML=`
