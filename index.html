@@ -587,6 +587,9 @@ const RCOLS={'Ece Aydın':'#2563EB','Mehmet Kaya':'#D97706','Ayşe Türk':'#0596
 
 let customers=[];
 let filtered=[];
+let tableSort={col:'',dir:'asc'};
+let tableRepFilter='';
+let tableColSearch='';
 
 function fmtDT(iso){
   if(!iso)return'—';
@@ -624,6 +627,51 @@ function fmtDate(d){if(!d)return'';const[y,m,day]=d.split('-');return day+' '+MO
 function calcR(){const f=parseInt(document.getElementById('nm-fee').value)||0,p=parseInt(document.getElementById('nm-pre').value)||0;document.getElementById('nm-rem').value=Math.max(0,f-p)||'';}
 
 function getVis(){return filtered;}
+
+function getTableData(){
+  let data=[...filtered];
+  if(tableColSearch){
+    const sq=tableColSearch.toLowerCase();
+    data=data.filter(c=>
+      (c.name&&c.name.toLowerCase().includes(sq))||
+      (c.id&&c.id.toLowerCase().includes(sq))||
+      (c.phone&&c.phone.includes(sq))
+    );
+  }
+  if(tableRepFilter) data=data.filter(c=>c.rep===tableRepFilter);
+  if(tableSort.col){
+    const d=tableSort.dir==='asc'?1:-1;
+    data.sort((a,b)=>{
+      switch(tableSort.col){
+        case 'name': return d*(a.name||'').localeCompare(b.name||'','tr');
+        case 'payment': return d*(((a.fee||0)-(a.prepay||0))-(((b.fee||0)-(b.prepay||0))));
+        case 'date': return d*((a.lastModRaw?new Date(a.lastModRaw).getTime():0)-(b.lastModRaw?new Date(b.lastModRaw).getTime():0));
+        case 'calls': return d*((a.callTotal||0)-(b.callTotal||0));
+        case 'appt': return d*((a.apptDate?new Date(a.apptDate).getTime():0)-(b.apptDate?new Date(b.apptDate).getTime():0));
+        default: return 0;
+      }
+    });
+  }
+  return data;
+}
+
+function sortTable(col){
+  if(tableSort.col===col) tableSort.dir=tableSort.dir==='asc'?'desc':'asc';
+  else{tableSort.col=col;tableSort.dir='desc';}
+  renderRows();
+}
+
+function getSortIcon(col){
+  if(tableSort.col!==col) return '<span style="color:var(--text3);font-size:9px;margin-left:3px">↕</span>';
+  return `<span style="color:var(--accent);font-size:9px;margin-left:3px;font-weight:700">${tableSort.dir==='asc'?'↑':'↓'}</span>`;
+}
+
+function resetTableFilters(){
+  tableSort={col:'',dir:'asc'};
+  tableRepFilter='';
+  tableColSearch='';
+  renderCusts();
+}
 
 function toast(msg,type='blue'){
   const wrap=document.getElementById('toast-wrap');
@@ -983,6 +1031,8 @@ function renderDashBody(){
 
 // CUSTOMERS
 function renderCusts(){
+  const reps=[...new Set(customers.map(c=>c.rep).filter(r=>r&&r!=='—'))].sort();
+  const hasColFilter=tableSort.col||tableRepFilter||tableColSearch;
   document.getElementById('main-content').innerHTML=`
   <div class="filter-bar">
     <div class="sw"><input class="si" placeholder="İsim, telefon veya dosya no..." oninput="fC(this.value)"></div>
@@ -996,19 +1046,55 @@ function renderCusts(){
     <select class="sel" onchange="fCo(this.value)">
       <option value="">Tüm ülkeler</option><option>🇩🇪 Almanya</option><option>🇬🇧 İngiltere</option><option>🇫🇷 Fransa</option><option>🇮🇹 İtalya</option><option>🇪🇸 İspanya</option><option>🇳🇱 Hollanda</option><option>🇧🇪 Belçika</option><option>🇦🇹 Avusturya</option><option>🇨🇭 İsviçre</option><option>🇵🇹 Portekiz</option><option>🇬🇷 Yunanistan</option><option>🇸🇪 İsveç</option><option>🇳🇴 Norveç</option><option>🇩🇰 Danimarka</option><option>🇵🇱 Polonya</option><option>🇨🇿 Çekya</option><option>🇭🇺 Macaristan</option><option>🇮🇪 İrlanda</option><option>🇫🇮 Finlandiya</option><option>🇺🇸 Amerika</option>
     </select>
+    ${hasColFilter?`<button class="btn btn-ghost btn-sm" onclick="resetTableFilters()">✕ Kolon filtrelerini temizle</button>`:''}
   </div>
   <div class="tbl-wrap">
     <div class="tbl-toolbar"><div class="tbl-label" id="cust-count">— Müşteri</div><button class="btn btn-ghost btn-sm" onclick="exportExcel()">📥 Excel</button></div>
     <div style="overflow-x:auto">
-    <table class="tbl" style="min-width:900px"><thead><tr><th>Dosya No</th><th>Ad Soyad</th><th>Telefon</th><th>Ülke</th><th>Aşama</th><th>Aramalar</th><th>Randevu</th><th>Ödeme</th><th>Temsilci</th><th>Güncelleme</th></tr></thead>
-    <tbody id="cust-tbody"></tbody></table>
+    <table class="tbl" style="min-width:960px">
+      <thead>
+        <tr>
+          <th>Dosya No</th>
+          <th style="cursor:pointer;user-select:none" onclick="sortTable('name')">Ad Soyad${getSortIcon('name')}</th>
+          <th>Telefon</th>
+          <th>Ülke</th>
+          <th>Aşama</th>
+          <th style="cursor:pointer;user-select:none" onclick="sortTable('calls')">Aramalar${getSortIcon('calls')}</th>
+          <th style="cursor:pointer;user-select:none" onclick="sortTable('appt')">Randevu${getSortIcon('appt')}</th>
+          <th style="cursor:pointer;user-select:none" onclick="sortTable('payment')">Ödeme${getSortIcon('payment')}</th>
+          <th>
+            <div style="display:flex;align-items:center;gap:4px">
+              Temsilci
+              <select onchange="tableRepFilter=this.value;renderRows()" style="font-size:10px;padding:1px 4px;border:1px solid var(--border);border-radius:4px;background:white;color:var(--text)">
+                <option value="">Tümü</option>
+                ${reps.map(r=>`<option value="${r}" ${tableRepFilter===r?'selected':''}>${r.split(' ')[0]}</option>`).join('')}
+              </select>
+            </div>
+          </th>
+          <th style="cursor:pointer;user-select:none" onclick="sortTable('date')">Güncelleme${getSortIcon('date')}</th>
+        </tr>
+        <tr style="background:var(--surface2);border-bottom:1px solid var(--border)">
+          <td colspan="3" style="padding:5px 12px">
+            <input class="si" placeholder="🔍 Dosya no, isim veya telefon ara..." value="${tableColSearch}"
+              oninput="tableColSearch=this.value;renderRows()"
+              style="width:100%;padding:5px 8px;font-size:11px;border-radius:6px">
+          </td>
+          <td colspan="7" style="padding:5px 12px">
+            <span style="font-size:10px;color:${hasColFilter?'var(--accent)':'var(--text3)'}">
+              ${hasColFilter?'● Kolon filtresi aktif — kolon başlıklarına tıklayarak sıralayabilirsiniz':'Kolon başlıklarına tıklayarak sıralayabilirsiniz'}
+            </span>
+          </td>
+        </tr>
+      </thead>
+      <tbody id="cust-tbody"></tbody>
+    </table>
     </div>
   </div>`;
   renderRows();
 }
 
 function renderRows(){
-  const list=getVis();
+  const list=getTableData();
   const cc=document.getElementById('cust-count'),tb=document.getElementById('cust-tbody');
   if(!cc||!tb)return;
   cc.textContent=list.length+' Müşteri';
