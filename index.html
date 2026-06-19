@@ -1316,7 +1316,7 @@ async function openPanel(id){
   document.getElementById('detail-panel').classList.add('open');
   document.getElementById('panel-body').innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div>';
 
-  let notes=[],calls=[],salesReps=[],docMap={},documents=[],history=[];
+  let notes=[],calls=[],salesReps=[],docMap={},documents=[],history=[],companions=[];
   try{
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getCustomerDetail',customerId:id,token:CU.token})});
     const d=await res.json();
@@ -1325,6 +1325,7 @@ async function openPanel(id){
     documents=(d.documents||[]);
     documents.forEach(x=>docMap[x.doc_name]=x.status);
     history=(d.history||[]).map(h=>({l:h.status,m:fmtDT(h.changed_at)+' · '+(h.changed_by||'—')}));
+    companions=(d.companions||[]);
   }catch(e){}
   if(CU.role==='management' && !window.salesRepCache){
     try{
@@ -1366,6 +1367,33 @@ async function openPanel(id){
         <div class="fi"><div class="fl">Aşamada Gün</div><div class="fv" style="color:${c.days>7?'var(--red)':'var(--text)'}">${c.days} gün</div></div>
       </div>
       <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="updateCustomerInfo('${c.id}')">💾 Müşteri Bilgilerini Kaydet</button>
+    </div>
+  </div>
+
+  <div class="ps">
+    <div class="ps-head"><div class="ps-title">👨‍👩‍👧 Refakatçiler <span style="font-weight:400;color:var(--text2)">(${companions.length})</span></div></div>
+    <div class="ps-body" style="display:flex;flex-direction:column;gap:6px">
+      ${companions.length===0?'<div style="font-size:12px;color:var(--text3)">Henüz refakatçi eklenmedi.</div>':''}
+      ${companions.map(cp=>`
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:7px;border:1px solid var(--border)">
+          <div>
+            <span style="font-size:12px;font-weight:600;color:var(--text)">👤 ${cp.name}</span>
+            <span style="font-size:11px;color:var(--text3);margin-left:8px">${cp.relationship||'Diğer'}</span>
+          </div>
+          <button class="btn btn-danger btn-sm" onclick="removeCompanion('${c.id}','${cp.id}')">✕</button>
+        </div>`).join('')}
+      <div style="display:flex;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--border)">
+        <input class="fi2" id="cp-name-${c.id}" type="text" placeholder="Ad Soyad" style="padding:6px;flex:2;font-size:11px">
+        <select class="sel" id="cp-rel-${c.id}" style="flex:1;font-size:11px">
+          <option value="Eş">Eş</option>
+          <option value="Çocuk">Çocuk</option>
+          <option value="Anne">Anne</option>
+          <option value="Baba">Baba</option>
+          <option value="Kardeş">Kardeş</option>
+          <option value="Diğer">Diğer</option>
+        </select>
+        <button class="btn btn-primary btn-sm" onclick="addCompanion('${c.id}')">+ Ekle</button>
+      </div>
     </div>
   </div>
 
@@ -1533,6 +1561,28 @@ async function openPanel(id){
   `;
 }
 
+async function addCompanion(id){
+  const name=(document.getElementById('cp-name-'+id)?.value||'').trim();
+  const relationship=document.getElementById('cp-rel-'+id)?.value||'Diğer';
+  if(!name){toast('İsim zorunludur','red');return;}
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addCompanion',customerId:id,companionName:name,companionRelationship:relationship,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Eklenemedi'),'red');return;}
+    await openPanel(id);
+    toast('✓ Refakatçi eklendi','green');
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+async function removeCompanion(id,companionId){
+  if(!confirm('Bu refakatçiyi silmek istediğine emin misin?'))return;
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'removeCompanion',customerId:id,companionId,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Silinemedi'),'red');return;}
+    await openPanel(id);
+    toast('🗑 Refakatçi silindi','amber');
+  }catch(e){toast('Bağlantı hatası','red');}
+}
 async function transferCustomer(id){
   const sel = document.getElementById('transfer-rep-'+id);
   const newRep = sel?.value;
@@ -1782,7 +1832,13 @@ async function openModal(){
     const d=await res.json();
     const salesReps=(d.users||[]).filter(u=>u.role==='sales');
     const repSelect=document.getElementById('nm-rep');
-    repSelect.innerHTML=salesReps.map(u=>`<option value="${u.username}">${u.name}</option>`).join('');
+    if(CU.role==='sales'){
+      repSelect.innerHTML=`<option value="${CU.username}">${CU.name} (Ben)</option>`;
+      repSelect.disabled=true;
+    } else {
+      repSelect.disabled=false;
+      repSelect.innerHTML=salesReps.map(u=>`<option value="${u.username}">${u.name}</option>`).join('');
+    }
   }catch(e){}
   document.getElementById('add-modal').classList.add('open');
 }
@@ -1795,8 +1851,10 @@ async function addCustomer(){
   const fee=parseInt(document.getElementById('nm-fee').value)||0,pre=parseInt(document.getElementById('nm-pre').value)||0;
   const country=document.getElementById('nm-country').value;
   const visa_type=document.getElementById('nm-visa').value;
+  const assignTo=document.getElementById('nm-rep').value;
+  if(!assignTo){toast('Lütfen bir satış temsilcisi seçin','red');return;}
   try{
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addCustomer',name,phone,email,country,visa_type,fee,prepay:pre,token:CU.token})});
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addCustomer',name,phone,email,country,visa_type,fee,prepay:pre,assignTo,token:CU.token})});
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Eklenemedi'),'red');return;}
     await loadCustomers();
