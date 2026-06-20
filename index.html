@@ -304,6 +304,7 @@ body{font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--t
 .b-unreachable{background:var(--purple-bg);color:var(--purple)}
 .b-notinterested{background:#F3F4F6;color:#4B5563}
 .b-contacted{background:#EFF6FF;color:var(--accent)}
+.b-interested{background:#F0FDFA;color:#0D9488}
 .b-proposal{background:var(--purple-bg);color:var(--purple)}
 .b-sale,.b-payment,.b-docs-done,.b-completed{background:var(--green-bg);color:var(--green)}
 .b-docs-pending,.b-appt-search,.b-waiting{background:var(--amber-bg);color:var(--amber)}
@@ -581,8 +582,8 @@ if (localStorage.getItem('vizecrm_token')) {
 const USERS=[];
 let CU=null;
 
-const STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'];
-const SCLS={'Yeni Kayıt':'b-lead','Sonra Ara':'b-callback','Ulaşılamıyor':'b-unreachable','İlgilenmiyor':'b-notinterested','İletişime Geçildi':'b-contacted','Ödeme Alındı':'b-payment','Belge Bekleniyor':'b-docs-pending','Belgeler Tamam':'b-docs-done','Randevu Aranıyor':'b-appt-search','Randevu Alındı':'b-appt-sched','Randevu Evrakları Hazırlanıyor':'b-docs-pending','Randevu Evrakları Tamamlandı':'b-docs-done','Başvuru Yapıldı':'b-submitted','Sonuç Bekleniyor':'b-waiting','Tamamlandı':'b-completed','İptal':'b-cancelled'};
+const STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'];
+const SCLS={'Yeni Kayıt':'b-lead','Sonra Ara':'b-callback','Ulaşılamıyor':'b-unreachable','İlgileniyor':'b-interested','İlgilenmiyor':'b-notinterested','İletişime Geçildi':'b-contacted','Ödeme Alındı':'b-payment','Belge Bekleniyor':'b-docs-pending','Belgeler Tamam':'b-docs-done','Randevu Aranıyor':'b-appt-search','Randevu Alındı':'b-appt-sched','Randevu Evrakları Hazırlanıyor':'b-docs-pending','Randevu Evrakları Tamamlandı':'b-docs-done','Başvuru Yapıldı':'b-submitted','Sonuç Bekleniyor':'b-waiting','Tamamlandı':'b-completed','İptal':'b-cancelled'};
 const MONTHS=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
 const RCOLS={'Ece Aydın':'#2563EB','Mehmet Kaya':'#D97706','Ayşe Türk':'#059669','Burak Sarı':'#DC2626','Ceren Yılmaz':'#0891B2','Onur Demir':'#7C3AED','Zehra Kaya':'#0D9488'};
 // Notlar ve aramalar artık customer_notes / customer_calls tablolarından geliyor
@@ -845,7 +846,7 @@ function gSearch(q){
 }
 
 // DASHBOARD
-const PRESALE_STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi'];
+const PRESALE_STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İletişime Geçildi'];
 function fmtTL(n){
   n=n||0;
   if(n>=1000000)return '₺'+(n/1000000).toFixed(2)+'M';
@@ -1012,7 +1013,7 @@ function avgSalesCycleDays(list){
 const FUNNEL_STAGES=['Yeni Kayıt','İletişime Geçildi','Ödeme Alındı','Randevu Alındı','Tamamlandı'];
 const FUNNEL_COLORS=['#6B7280','#2563EB','#7C3AED','#D97706','#059669'];
 // ---- OPERASYONEL UYARILAR ----
-const WARN_SALES_S=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi'];
+const WARN_SALES_S=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İletişime Geçildi'];
 const WARN_EVRAK_S=['Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor'];
 const WARN_RANDEVU_S=['Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor'];
 
@@ -1167,7 +1168,7 @@ function renderCusts(){
     <div class="sw"><input class="si" placeholder="İsim, telefon veya dosya no..." oninput="fC(this.value)"></div>
     <select class="sel" onchange="fS(this.value)">
       <option value="">Tüm aşamalar</option>
-      <optgroup label="📞 İletişim"><option>Yeni Kayıt</option><option>Sonra Ara</option><option>Ulaşılamıyor</option><option>İlgilenmiyor</option><option>İletişime Geçildi</option></optgroup>
+      <optgroup label="📞 İletişim"><option>Yeni Kayıt</option><option>Sonra Ara</option><option>Ulaşılamıyor</option><option>İlgileniyor</option><option>İlgilenmiyor</option><option>İletişime Geçildi</option></optgroup>
       <optgroup label="💼 Satış"><option>Ödeme Alındı</option></optgroup>
       <optgroup label="📋 Operasyon"><option>Belge Bekleniyor</option><option>Belgeler Tamam</option><option>Randevu Aranıyor</option><option>Randevu Alındı</option><option>Randevu Evrakları Hazırlanıyor</option><option>Randevu Evrakları Tamamlandı</option><option>Başvuru Yapıldı</option><option>Sonuç Bekleniyor</option></optgroup>
       <optgroup label="✅ Sonuç"><option>Tamamlandı</option><option>İptal</option></optgroup>
@@ -1257,8 +1258,8 @@ function fS(s){filtered=s?customers.filter(c=>c.status===s):[...customers];rende
 function fCo(s){filtered=s?customers.filter(c=>c.country===s):[...customers];renderRows();}
 
 // PIPELINE
-const KSTAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı'];
-const KCOLS={'Yeni Kayıt':'#6B7280','Sonra Ara':'#2563EB','Ulaşılamıyor':'#7C3AED','İlgilenmiyor':'#4B5563','İletişime Geçildi':'#2563EB','Ödeme Alındı':'#059669','Belge Bekleniyor':'#D97706','Belgeler Tamam':'#059669','Randevu Aranıyor':'#D97706','Randevu Alındı':'#2563EB','Randevu Evrakları Hazırlanıyor':'#D97706','Randevu Evrakları Tamamlandı':'#059669','Başvuru Yapıldı':'#7C3AED','Sonuç Bekleniyor':'#D97706','Tamamlandı':'#059669'};
+const KSTAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı'];
+const KCOLS={'Yeni Kayıt':'#6B7280','Sonra Ara':'#2563EB','Ulaşılamıyor':'#7C3AED','İlgileniyor':'#0D9488','İletişime Geçildi':'#2563EB','Ödeme Alındı':'#059669','Belge Bekleniyor':'#D97706','Belgeler Tamam':'#059669','Randevu Aranıyor':'#D97706','Randevu Alındı':'#2563EB','Randevu Evrakları Hazırlanıyor':'#D97706','Randevu Evrakları Tamamlandı':'#059669','Başvuru Yapıldı':'#7C3AED','Sonuç Bekleniyor':'#D97706','Tamamlandı':'#059669'};
 
 function renderPipeline(){
   const mc=document.getElementById('main-content');
@@ -1390,7 +1391,7 @@ async function renderUsers(){
         <button class="btn btn-ghost btn-sm" onclick="openEditUserModal('${u.username}')">👤 Profil</button>
         <button class="btn btn-ghost btn-sm" onclick="editPw('${u.username}')">🔑 Şifre</button>
         <button class="btn btn-amber btn-sm" onclick="resetPw('${u.username}')">🔄 Sıfırla</button>
-        ${CU.superAdmin?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.username}')">🗑 Sil</button>`:''}
+        ${(CU.role==='management')?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.username}')">🗑 Sil</button>`:''}
       </div>
     </div>`;
   }).join('')}
@@ -1568,10 +1569,10 @@ async function openPanel(id){
   const next=STAGES[si+1];
 
   const ROLE_QBTNS={
-    sales:['Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı'],
+    sales:['Sonra Ara','Ulaşılamıyor','İlgileniyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı'],
     evrak:['Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı'],
     randevu:['Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'],
-    management:['Sonra Ara','Ulaşılamıyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'],
+    management:['Sonra Ara','Ulaşılamıyor','İlgileniyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'],
   };
   const qBtnList=ROLE_QBTNS[CU.role]||ROLE_QBTNS.management;
   const qBtns=qBtnList.map(s=>`<button class="qs-btn ${c.status===s?'active':''}" onclick="moveStatus('${c.id}','${s}')">${s}</button>`).join('');
