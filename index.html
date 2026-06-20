@@ -606,7 +606,7 @@ async function loadCustomers(){
     const rows=data.customers||[];
     customers=rows.map(r=>({
       id:r.file_number,name:r.full_name,phone:r.phone,email:r.email,country:r.country,
-      visa:r.visa_type,rep:r.rep_name||'—',ops:'',
+      visa:r.visa_type,rep:r.rep_name||'—',ops:'',source:r.source||'manual',
       evrakRep:r.evrak_rep_name||'',randevuRep:r.randevu_rep_name||'',
       status:r.status,fee:r.service_fee||0,prepay:r.prepayment||0,
       days:r.last_modified_at?Math.max(0,Math.floor((Date.now()-new Date(r.last_modified_at).getTime())/86400000)):0,
@@ -858,9 +858,19 @@ function barsHTML(list,max,colors){
   return list.map(([label,count],i)=>`<div class="bar-row"><div class="bar-lbl">${label}</div><div class="bar-track"><div class="bar-fill" style="width:${Math.max(8,Math.round(count/max*100))}%;background:${colors[i%colors.length]}"></div></div><div class="bar-val">${count} kişi</div></div>`).join('');
 }
 
-function renderDash(){
+let analyticsData=null;
+async function loadAnalytics(){
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getAnalytics',token:CU.token})});
+    const d=await res.json();
+    if(d.reps) analyticsData=d;
+  }catch(e){}
+}
+
+async function renderDash(){
   document.getElementById('main-content').innerHTML=`<div id="dash-filterbar"></div><div id="dash-body"></div>`;
   renderDashFilterBar();
+  if(!analyticsData) await loadAnalytics();
   renderDashBody();
 }
 
@@ -904,6 +914,83 @@ function renderDashFilterBar(){
       ${countries.map(c=>`<option value="${c}" ${dashCountry===c?'selected':''}>${c}</option>`).join('')}
     </select>
     ${active?`<button class="btn btn-ghost btn-sm" onclick="dashPeriod='all';dashRep='';dashCountry='';renderDash()">✕ Filtreleri Temizle</button>`:''}
+  </div>`;
+}
+
+// ---- ANALİTİK WIDGET'LARI ----
+function buildStageDurationHTML(){
+  if(!analyticsData) return '';
+  const sd=analyticsData.stageDurations;
+  const cards=[
+    {label:'Ort. Satış Süresi',val:sd.salesAvg,count:sd.salesCount,color:'#2563EB',bg:'#DBEAFE',icon:'📞'},
+    {label:'Ort. Evrak Süresi',val:sd.evrakAvg,count:sd.evrakCount,color:'#D97706',bg:'#FEF3C7',icon:'🗂'},
+    {label:'Ort. Randevu Süresi',val:sd.randevuAvg,count:sd.randevuCount,color:'#7C3AED',bg:'#EDE9FE',icon:'📅'},
+  ];
+  return `
+  <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:20px">
+    ${cards.map(c=>`
+    <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <div style="width:28px;height:28px;border-radius:8px;background:${c.bg};display:flex;align-items:center;justify-content:center;font-size:13px">${c.icon}</div>
+        <div style="font-size:11px;color:var(--text3);font-weight:600">${c.label}</div>
+      </div>
+      <div style="font-size:24px;font-weight:700;color:${c.color}">${c.val!==null?c.val+' gün':'—'}</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:2px">${c.count} dosyadan hesaplandı</div>
+    </div>`).join('')}
+  </div>`;
+}
+
+function buildPerformanceHTML(){
+  if(!analyticsData) return '';
+  const tabs=[['sales','💼 Satış','Dönüşüm'],['evrak','🗂 Evrak','Tamamlanan'],['randevu','📅 Randevu','Tamamlanan']];
+  const anyData=tabs.some(([k])=>(analyticsData.reps[k]||[]).length>0);
+  if(!anyData) return '';
+  return `
+  <div style="background:#fff;border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:20px">
+    <div style="padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface2)">
+      <div style="font-size:13px;font-weight:600">🏆 Performans Karşılaştırması</div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr))">
+      ${tabs.map(([key,label],i)=>{
+        const list=analyticsData.reps[key]||[];
+        return `
+        <div style="padding:16px 18px;${i>0?'border-left:1px solid var(--border)':''}">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px">${label}</div>
+          ${list.length===0?'<div style="font-size:11px;color:var(--text3)">Henüz veri yok</div>':list.map((r,idx)=>`
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;${idx<list.length-1?'border-bottom:1px solid var(--border)':''}">
+              <div style="display:flex;align-items:center;gap:6px;min-width:0">
+                <span style="font-size:10px;color:var(--text3);width:14px;flex-shrink:0">${idx+1}.</span>
+                <span style="font-size:12px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r.name}</span>
+              </div>
+              <div style="text-align:right;flex-shrink:0;margin-left:8px">
+                <div style="font-size:12px;font-weight:700;color:var(--accent)">%${r.rate}</div>
+                <div style="font-size:9px;color:var(--text3)">${r.completed}/${r.total}${r.avgDays!==null?' · '+r.avgDays+'g':''}</div>
+              </div>
+            </div>`).join('')}
+        </div>`;
+      }).join('')}
+    </div>
+  </div>`;
+}
+
+function buildSourceHTML(){
+  if(!analyticsData) return '';
+  const sb=analyticsData.sourceBreakdown;
+  const total=sb.manual+sb.google_forms;
+  if(total===0) return '';
+  const manualPct=Math.round(sb.manual/total*100);
+  const gformPct=100-manualPct;
+  return `
+  <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:20px">
+    <div style="font-size:13px;font-weight:600;margin-bottom:12px">📥 Kaynak Dağılımı</div>
+    <div style="display:flex;height:10px;border-radius:6px;overflow:hidden;margin-bottom:10px;background:var(--surface2)">
+      <div style="width:${manualPct}%;background:#2563EB"></div>
+      <div style="width:${gformPct}%;background:#059669"></div>
+    </div>
+    <div style="display:flex;gap:20px;font-size:11px;color:var(--text2);flex-wrap:wrap">
+      <div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#2563EB;margin-right:5px"></span>Manuel Eklenen: <strong>${sb.manual}</strong> (%${manualPct})</div>
+      <div><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:#059669;margin-right:5px"></span>Google Form: <strong>${sb.google_forms}</strong> (%${gformPct})</div>
+    </div>
   </div>`;
 }
 
@@ -1033,6 +1120,9 @@ function renderDashBody(){
   </div>
   ${staleList.length?`<div class="alert alert-red"><div style="display:flex;align-items:center;gap:10px"><span>⚠️</span><div><div style="font-size:13px;font-weight:600;color:var(--red)">${staleList.length} dosya 7+ gün aynı aşamada bekliyor</div><div style="font-size:11px;color:var(--text2);margin-top:1px">Bekleyen dosyalar iade riskini artırır</div></div></div><button class="btn btn-danger btn-sm" onclick="showPage('customers')">Görüntüle →</button></div>`:''}
   ${buildWarningsHTML()}
+  ${buildStageDurationHTML()}
+  ${buildPerformanceHTML()}
+  ${buildSourceHTML()}
   ${funnelHTML(all)}
   <div class="charts-grid">
     <div class="chart-card"><div class="chart-title">Ülkeye Göre Dağılım</div>${barsHTML(byCountry.list,byCountry.max,['var(--accent)','var(--purple)','var(--green)','var(--amber)'])}</div>
