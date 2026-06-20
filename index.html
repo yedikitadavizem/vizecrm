@@ -1441,7 +1441,6 @@ async function resetPw(un){
   renderUsers();
 }
 async function deleteUser(un){
-  if(!CU.superAdmin){toast('Sadece Süper Admin silebilir','red');return;}
   if(!confirm(un+' kullanıcısını silmek istediğine emin misin? Bu işlem geri alınamaz!'))return;
   const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'deleteUser',username:un,token:CU.token})});
   const d=await res.json();
