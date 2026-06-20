@@ -607,6 +607,7 @@ async function loadCustomers(){
     customers=rows.map(r=>({
       id:r.file_number,name:r.full_name,phone:r.phone,email:r.email,country:r.country,
       visa:r.visa_type,rep:r.rep_name||'—',ops:'',
+      evrakRep:r.evrak_rep_name||'',randevuRep:r.randevu_rep_name||'',
       status:r.status,fee:r.service_fee||0,prepay:r.prepayment||0,
       days:r.last_modified_at?Math.max(0,Math.floor((Date.now()-new Date(r.last_modified_at).getTime())/86400000)):0,
       lastMod:fmtDT(r.last_modified_at),
@@ -1127,19 +1128,23 @@ function renderRows(){
       <td>${c.callTotal===0?'<span style="color:var(--text3)">—</span>':`<span style="color:var(--accent);font-weight:700;font-size:12px">📞${c.callTotal}</span><span style="color:var(--green);font-size:10px;margin-left:4px">${c.callReached}✓</span>`}</td>
       <td style="font-size:11px;color:${c.apptDate?'var(--accent)':'var(--text3)'}">${c.apptDate?'📅 '+fmtDate(c.apptDate):'—'}</td>
       <td style="font-size:11px;color:${rem<=0?'var(--green)':'var(--amber)'};font-weight:600">${rem<=0?'✓ Tam':'₺'+rem.toLocaleString('tr-TR')}</td>
-      <td><div style="display:flex;align-items:center;gap:6px"><div class="av av-24" style="background:${col};color:#fff">${initials(c.rep)}</div><span style="font-size:11px;color:var(--text2)">${c.rep.split(' ')[0]}</span>${CU.role==='management'?currentDeptBadge(c.status):''}</div></td>
+      <td><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><div class="av av-24" style="background:${col};color:#fff">${initials(c.rep)}</div><span style="font-size:11px;color:var(--text2)">${c.rep.split(' ')[0]}</span>${CU.role==='management'?currentDeptBadge(c):''}</div></td>
       <td style="font-size:10px;color:var(--text3)">🕐 ${c.lastMod}</td>
     </tr>`;
   }).join('');
 }
 
-function currentDeptBadge(status){
-  let dept,color,bg;
-  if(WARN_SALES_S.includes(status)){dept='Satış';color='#2563EB';bg='#DBEAFE';}
-  else if(WARN_EVRAK_S.includes(status)){dept='Evrak';color='#D97706';bg='#FEF3C7';}
-  else if(WARN_RANDEVU_S.includes(status)){dept='Randevu';color='#7C3AED';bg='#EDE9FE';}
-  else return '';
-  return `<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;background:${bg};color:${color};margin-left:2px">${dept}</span>`;
+function currentDeptBadge(c){
+  let label,color,bg;
+  if(WARN_SALES_S.includes(c.status)) return '';
+  else if(WARN_EVRAK_S.includes(c.status)){
+    color='#D97706';bg='#FEF3C7';
+    label=c.evrakRep?('🗂 '+c.evrakRep.split(' ')[0]):'Evraka atanacak';
+  } else if(WARN_RANDEVU_S.includes(c.status)){
+    color='#7C3AED';bg='#EDE9FE';
+    label=c.randevuRep?('📅 '+c.randevuRep.split(' ')[0]):'Randevuya atanacak';
+  } else return '';
+  return `<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;background:${bg};color:${color};margin-left:2px;white-space:nowrap">${label}</span>`;
 }
 
 function fC(q){const sq=q.toLowerCase();filtered=customers.filter(c=>c.name.toLowerCase().includes(sq)||c.id.toLowerCase().includes(sq)||c.phone.includes(sq));renderRows();}
