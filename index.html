@@ -593,6 +593,7 @@ let filtered=[];
 let tableSort={col:'',dir:'asc'};
 let tableRepFilter='';
 let tableColSearch='';
+let panelReadOnly=false;
 
 // Dışarıdan (Google Form vb.) gelen serbest metinleri HTML'e basmadan önce temizler — XSS koruması
 function esc(str){
@@ -1297,7 +1298,7 @@ async function renderSold(){
           const paidFull=(c.service_fee>0&&rem===0);
           const apptStr=c.appt_date?('📅 '+fmtDate(c.appt_date)):'—';
           const lastMod=c.last_modified_at?fmtDT(c.last_modified_at):(c.created_at?fmtDT(c.created_at):'—');
-          return `<tr style="opacity:0.92">
+          return `<tr style="opacity:0.92;cursor:pointer" onclick="openPanel('${c.file_number}',true)">
             <td style="font-size:10px;color:var(--text3)">${c.file_number}</td>
             <td style="font-weight:600;font-size:12px">${c.full_name}</td>
             <td style="font-size:11px;color:var(--text2)">${c.country||'—'}<br><span style="color:var(--text3)">${c.visa_type||'—'}</span></td>
@@ -1586,7 +1587,8 @@ async function savePw(){
 const RLABELS={ulasildi:'✅ Ulaşıldı',cevapsiz:'📵 Cevap Vermedi',sonra_ara:'🔄 Sonra Ara',mesaj:'💬 Mesaj Bırakıldı'};
 const RCLS={ulasildi:'b-completed',cevapsiz:'b-cancelled',sonra_ara:'b-callback',mesaj:'b-proposal'};
 
-async function openPanel(id){
+async function openPanel(id, readonly=false){
+  panelReadOnly=readonly;
   const c=customers.find(x=>x.id===id);if(!c)return;
   document.getElementById('pn-name').textContent=c.name;
   document.getElementById('pn-fileno').textContent=c.id+' · '+c.country;
@@ -1631,17 +1633,19 @@ async function openPanel(id){
     management:['Sonra Ara','Ulaşılamıyor','İlgileniyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'],
   };
   const qBtnList=ROLE_QBTNS[CU.role]||ROLE_QBTNS.management;
-  const qBtns=qBtnList.map(s=>`<button class="qs-btn ${c.status===s?'active':''}" onclick="moveStatus('${c.id}','${s}')">${s}</button>`).join('');
+  const qBtns=panelReadOnly?''
+    :qBtnList.map(s=>`<button class="qs-btn ${c.status===s?'active':''}" onclick="moveStatus('${c.id}','${s}')">${s}</button>`).join('');
 
   document.getElementById('panel-body').innerHTML=`
+  ${panelReadOnly?'<div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;padding:8px 14px;font-size:11px;color:#854D0E;margin-bottom:4px">👁 Salt okunur görünüm — bu müşteri artık başka bir ekibin sorumluluğunda.</div>':''}
   <div class="ps">
     <div class="ps-head"><div class="ps-title">Müşteri Bilgileri</div></div>
     <div class="ps-body">
       <div class="field-grid">
-        <div class="fi"><div class="fl">Ad Soyad</div><input class="fi2" id="ed-name-${c.id}" value="${c.name}" style="padding:6px;width:100%"></div>
-        <div class="fi"><div class="fl">Telefon</div><input class="fi2" id="ed-phone-${c.id}" value="${c.phone}" style="padding:6px;width:100%"></div>
-        <div class="fi"><div class="fl">E-posta</div><input class="fi2" id="ed-email-${c.id}" value="${c.email||''}" style="padding:6px;width:100%"></div>
-        <div class="fi"><div class="fl">Vize Türü</div><select class="fi2" id="ed-visa-${c.id}" style="padding:6px;width:100%">
+        <div class="fi"><div class="fl">Ad Soyad</div><input class="fi2" id="ed-name-${c.id}" value="${c.name}" style="padding:6px;width:100%" ${panelReadOnly?'disabled':''}></div>
+        <div class="fi"><div class="fl">Telefon</div><input class="fi2" id="ed-phone-${c.id}" value="${c.phone}" style="padding:6px;width:100%" ${panelReadOnly?'disabled':''}></div>
+        <div class="fi"><div class="fl">E-posta</div><input class="fi2" id="ed-email-${c.id}" value="${c.email||''}" style="padding:6px;width:100%" ${panelReadOnly?'disabled':''}></div>
+        <div class="fi"><div class="fl">Vize Türü</div><select class="fi2" id="ed-visa-${c.id}" style="padding:6px;width:100%" ${panelReadOnly?'disabled':''}>
           <option ${c.visa==='Schengen Turistik'?'selected':''}>Schengen Turistik</option>
           <option ${c.visa==='Çalışma Vizesi'?'selected':''}>Çalışma Vizesi</option>
           <option ${c.visa==='Öğrenci Vizesi'?'selected':''}>Öğrenci Vizesi</option>
@@ -1650,7 +1654,7 @@ async function openPanel(id){
         <div class="fi"><div class="fl">Satış Temsilcisi</div><div class="fv">${c.rep}</div></div>
         <div class="fi"><div class="fl">Aşamada Gün</div><div class="fv" style="color:${c.days>7?'var(--red)':'var(--text)'}">${c.days} gün</div></div>
       </div>
-      <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="updateCustomerInfo('${c.id}')">💾 Müşteri Bilgilerini Kaydet</button>
+      ${panelReadOnly?'':'<button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="updateCustomerInfo(\''+c.id+'\')">💾 Müşteri Bilgilerini Kaydet</button>'}
     </div>
   </div>
 
@@ -1664,9 +1668,9 @@ async function openPanel(id){
             <span style="font-size:12px;font-weight:600;color:var(--text)">👤 ${cp.name}</span>
             <span style="font-size:11px;color:var(--text3);margin-left:8px">${cp.relationship||'Diğer'}</span>
           </div>
-          <button class="btn btn-danger btn-sm" onclick="removeCompanion('${c.id}','${cp.id}')">✕</button>
+          ${panelReadOnly?'':'<button class="btn btn-danger btn-sm" onclick="removeCompanion(\''+c.id+'\',\''+cp.id+'\')">✕</button>'}
         </div>`).join('')}
-      <div style="display:flex;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--border)">
+      ${panelReadOnly?'':` <div style="display:flex;gap:6px;margin-top:6px;padding-top:8px;border-top:1px solid var(--border)">
         <input class="fi2" id="cp-name-${c.id}" type="text" placeholder="Ad Soyad" style="padding:6px;flex:2;font-size:11px">
         <select class="sel" id="cp-rel-${c.id}" style="flex:1;font-size:11px">
           <option value="Eş">Eş</option>
@@ -1709,12 +1713,18 @@ async function openPanel(id){
 
   <div class="ps">
     <div class="ps-head"><div class="ps-title">Ödeme Durumu</div><span style="font-size:11px;color:${pct>=100?'var(--green)':'var(--amber)'}">%${pct} tahsil edildi</span></div>
+    ${panelReadOnly?`
+    <div class="pay-row"><div class="pay-lbl">Toplam Bedel</div><div class="pay-val">₺${(c.fee||0).toLocaleString('tr-TR')}</div></div>
+    <div class="pay-row"><div class="pay-lbl">Ön Ödeme</div><div class="pay-val">₺${(c.prepay||0).toLocaleString('tr-TR')}</div></div>
+    <div class="pay-row"><div class="pay-lbl">Kalan</div><div class="pay-val" style="color:${rem>0?'var(--amber)':'var(--green)'}">₺${rem.toLocaleString('tr-TR')}</div></div>
+    `:`
     <div class="pay-row"><div class="pay-lbl">Toplam Bedel</div><div style="display:flex;align-items:center;gap:8px"><input class="fi2" type="number" id="ed-fee-${c.id}" value="${c.fee}" style="padding:6px;width:100px"><span style="font-size:11px;color:var(--text3)">₺</span></div></div>
     <div class="pay-row"><div class="pay-lbl">Ön Ödeme Alındı</div><div style="display:flex;align-items:center;gap:8px"><input class="fi2" type="number" id="ed-prepay-${c.id}" value="${c.prepay}" style="padding:6px;width:100px"><span style="font-size:11px;color:var(--text3)">₺</span><button class="btn btn-primary btn-sm" onclick="updatePayment('${c.id}')">✓ Kaydet</button></div></div>
     <div class="pay-row"><div class="pay-lbl">Kalan Ödeme</div><div style="display:flex;align-items:center;gap:8px">
       <div class="pay-val" style="color:${rem>0?'var(--amber)':'var(--green)'}">₺${rem.toLocaleString('tr-TR')}</div>
       ${rem>0?`<span class="pbadge pb-pend">⏳ Bekliyor</span><button class="btn btn-success btn-sm" onclick="markPaid('${c.id}')">Tahsil ✓</button>`:'<span class="pbadge pb-ok">✓ Tamamlandı</span>'}
     </div></div>
+    `}
     <div class="pay-row" style="background:var(--surface2)"><div class="pay-lbl" style="font-weight:600">Tahsilat Oranı</div>
       <div style="display:flex;align-items:center;gap:10px;flex:1;max-width:180px">
         <div style="flex:1;background:var(--border);border-radius:4px;height:6px;overflow:hidden"><div style="width:${pct}%;background:${pct>=100?'var(--green)':'var(--accent)'};height:100%;border-radius:4px;transition:width 1s"></div></div>
@@ -1730,13 +1740,16 @@ async function openPanel(id){
       return `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:7px;border:1px solid var(--border)">
         <span style="font-size:12px;color:var(--text)">📄 ${d.doc_name}</span>
-        <select class="sel" style="font-size:11px;padding:3px 8px;width:auto" onchange="updateDocStatus('${c.id}','${d.doc_name}',this.value)">
-          <option value="Bekleniyor" ${d.status==='Bekleniyor'?'selected':''}>⏳ Bekleniyor</option>
-          <option value="Yüklendi" ${d.status==='Yüklendi'?'selected':''}>📤 Yüklendi</option>
-          <option value="Onaylandı" ${d.status==='Onaylandı'?'selected':''}>✓ Onaylandı</option>
-        </select>
+        ${panelReadOnly
+          ?`<span class="badge ${d.status==='Onaylandı'?'b-docs-done':d.status==='Yüklendi'?'b-ops':'b-lead'}">${d.status}</span>`
+          :`<select class="sel" style="font-size:11px;padding:3px 8px;width:auto" onchange="updateDocStatus('${c.id}','${d.doc_name}',this.value)">
+            <option value="Bekleniyor" ${d.status==='Bekleniyor'?'selected':''}>⏳ Bekleniyor</option>
+            <option value="Yüklendi" ${d.status==='Yüklendi'?'selected':''}>📤 Yüklendi</option>
+            <option value="Onaylandı" ${d.status==='Onaylandı'?'selected':''}>✓ Onaylandı</option>
+          </select>`
+        }
       </div>`;}).join('')}
-    ${CU.role==='management'?`
+    ${(!panelReadOnly&&CU.role==='management')?`
     <div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
       <input class="fi2" id="new-doc-${c.id}" type="text" placeholder="Belge adı (örn: Davet Mektubu)" style="padding:6px;flex:1;font-size:11px">
       <button class="btn btn-primary btn-sm" onclick="addNewDocument('${c.id}')">+ Ekle</button>
@@ -1762,7 +1775,7 @@ async function openPanel(id){
             ${cl.note?'<div style="font-size:11px;color:var(--text2);margin-top:4px">📌 '+cl.note+'</div>':''}
           </div>
         </div>`).join('')}</div>
-      <div style="margin-top:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+      ${panelReadOnly?'':` <div style="margin-top:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
         <div style="font-size:11px;font-weight:600;color:var(--text2)">+ Yeni Arama Kaydı</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <select class="sel" id="cl-r-${c.id}" style="flex:1;min-width:140px">
@@ -1771,7 +1784,7 @@ async function openPanel(id){
           <input class="fi2" id="cl-n-${c.id}" placeholder="Kısa not..." style="flex:2;min-width:140px">
         </div>
         <button class="btn btn-primary btn-sm" style="align-self:flex-start" onclick="addCall('${c.id}')">📞 Kaydet</button>
-      </div>
+      </div>`}
     </div>
   </div>
 
@@ -1779,10 +1792,10 @@ async function openPanel(id){
     <div class="ps-head"><div class="ps-title">📝 Notlar <span style="font-weight:400;color:var(--text2)">(${notes.length})</span></div></div>
     <div class="ps-body">
       <div id="nl-${c.id}">${notes.length?notes.map(n=>`<div class="note-item"><div class="note-text">${n.text}</div><div class="note-meta">📝 ${n.author} — ${n.date}</div></div>`).join(''):'<div style="font-size:12px;color:var(--text3);padding:4px 0">Henüz not yok.</div>'}</div>
-      <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+      ${panelReadOnly?'':` <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
         <textarea class="fi2" id="ni-${c.id}" rows="3" placeholder="Not ekle — aşama durumu, özel talepler, hatırlatmalar..."></textarea>
         <button class="btn btn-primary btn-sm" style="align-self:flex-start" onclick="saveNote('${c.id}')">📝 Kaydet</button>
-      </div>
+      </div>`}
     </div>
   </div>
 
@@ -1793,7 +1806,7 @@ async function openPanel(id){
     </div>
   </div>
 
-  <div class="ps">
+  ${panelReadOnly?'':` <div class="ps">
     <div class="ps-head"><div class="ps-title">İade İşlemi</div>${c.refundStatus==='Talep Edildi'?'<span class="badge" style="background:var(--amber-bg);color:var(--amber)">⏳ Talep Edildi</span>':c.refundStatus==='Gerçekleşti'?'<span class="badge" style="background:var(--red-bg);color:var(--red)">✓ Gerçekleşti</span>':''}</div>
     <div class="ps-body">
     ${c.refundStatus==='Gerçekleşti'?`
@@ -1841,7 +1854,7 @@ async function openPanel(id){
       <div style="font-size:12px;color:var(--text2)">Bu müşteriyi kalıcı olarak sil</div>
       <button class="btn btn-danger btn-sm" onclick="deleteCustomer('${c.id}')">🗑 Müşteriyi Sil</button>
     </div>
-  </div>`:''}
+  </div>`}
   `;
 }
 
