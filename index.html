@@ -1589,7 +1589,30 @@ const RCLS={ulasildi:'b-completed',cevapsiz:'b-cancelled',sonra_ara:'b-callback'
 
 async function openPanel(id, readonly=false){
   panelReadOnly=readonly;
-  const c=customers.find(x=>x.id===id);if(!c)return;
+  let c=customers.find(x=>x.id===id);
+  
+  // Satışlarım sayfasındaki müşteriler customers dizisinde olmayabilir, backend'den al
+  if(!c){
+    document.getElementById('overlay').classList.add('open');
+    document.getElementById('detail-panel').classList.add('open');
+    document.getElementById('panel-body').innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div>';
+    try{
+      const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getSoldCustomers',token:CU.token})});
+      const d=await res.json();
+      const raw=(d.customers||[]).find(r=>r.file_number===id);
+      if(!raw){document.getElementById('panel-body').innerHTML='<div style="padding:40px;text-align:center;color:var(--red)">Müşteri bulunamadı.</div>';return;}
+      c={id:raw.file_number,name:esc(raw.full_name),phone:esc(raw.phone),email:esc(raw.email||''),
+        country:esc(raw.country),visa:esc(raw.visa_type),rep:raw.rep_name||'—',
+        fee:raw.service_fee||0,prepay:raw.prepayment||0,status:raw.status,
+        apptDate:raw.appt_date||'',days:0,lastMod:'—',lastModRaw:raw.last_modified_at,
+        refundStatus:raw.refund_status,refundAmount:raw.refund_amount,
+        refundReason:raw.refund_reason,refundDate:raw.refund_date,
+        refundRequestedBy:raw.refund_requested_by,refundRequestedAt:raw.refund_requested_at,
+        evrakRep:raw.evrak_rep_name||'',randevuRep:raw.randevu_rep_name||'',source:raw.source||'manual'};
+    }catch(e){document.getElementById('panel-body').innerHTML='<div style="padding:40px;text-align:center;color:var(--red)">Bağlantı hatası.</div>';return;}
+  }
+  
+  if(!c)return;
   document.getElementById('pn-name').textContent=c.name;
   document.getElementById('pn-fileno').textContent=c.id+' · '+c.country;
   document.getElementById('pn-lastmod').textContent='🕐 '+c.lastMod;
