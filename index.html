@@ -1681,7 +1681,7 @@ async function openPanel(id, readonly=false){
           <option value="Diğer">Diğer</option>
         </select>
         <button class="btn btn-primary btn-sm" onclick="addCompanion('${c.id}')">+ Ekle</button>
-      </div>
+      </div>`}
     </div>
   </div>
 
@@ -1854,7 +1854,8 @@ async function openPanel(id, readonly=false){
       <div style="font-size:12px;color:var(--text2)">Bu müşteriyi kalıcı olarak sil</div>
       <button class="btn btn-danger btn-sm" onclick="deleteCustomer('${c.id}')">🗑 Müşteriyi Sil</button>
     </div>
-  </div>`}
+  </div>`:''}
+  `}
   `;
 }
 
