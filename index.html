@@ -2212,8 +2212,23 @@ async function addCustomer(){
   if(!assignTo){toast('Lütfen bir satış temsilcisi seçin','red');addingCustomer=false;return;}
   const btn=document.querySelector('#add-modal .btn-primary');
   if(btn){btn.disabled=true;btn.textContent='Kaydediliyor...';}
+  const payload=JSON.stringify({action:'addCustomer',name,phone,email,country,visa_type,fee,prepay:pre,assignTo,token:CU.token});
+  let res=null;
   try{
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addCustomer',name,phone,email,country,visa_type,fee,prepay:pre,assignTo,token:CU.token})});
+    res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:payload});
+  }catch(e){
+    // İlk denemede bağlantı hatası — 1.5 saniye bekleyip tekrar dene (cold start)
+    if(btn)btn.textContent='Tekrar deneniyor...';
+    await new Promise(r=>setTimeout(r,1500));
+    try{
+      res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:payload});
+    }catch(e2){
+      toast('Bağlantı hatası — internet bağlantınızı kontrol edin','red');
+      if(btn){btn.disabled=false;btn.textContent='✓ Müşteriyi Kaydet';}
+      addingCustomer=false;return;
+    }
+  }
+  try{
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Eklenemedi'),'red');if(btn){btn.disabled=false;btn.textContent='✓ Müşteriyi Kaydet';}addingCustomer=false;return;}
     if(d.duplicate){toast('⚠️ Bu telefon numarası az önce kaydedildi ('+d.id+')','amber');closeModal();addingCustomer=false;loadCustomers().then(()=>{if(document.getElementById('cust-tbody'))renderRows();});return;}
@@ -2222,7 +2237,7 @@ async function addCustomer(){
     ['nm-name','nm-phone','nm-email','nm-fee','nm-pre','nm-rem'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
     loadCustomers().then(()=>{if(document.getElementById('cust-tbody'))renderRows();if(document.getElementById('kanban'))renderPipeline();});
   }catch(e){
-    toast('Bağlantı hatası','red');
+    toast('Sunucu yanıt hatası — lütfen tekrar deneyin','red');
     if(btn){btn.disabled=false;btn.textContent='✓ Müşteriyi Kaydet';}
   }finally{
     addingCustomer=false;
