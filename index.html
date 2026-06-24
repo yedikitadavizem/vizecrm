@@ -634,7 +634,7 @@ async function loadCustomers(){
 }
 
 function initials(n){return(n||'').split(' ').map(x=>x[0]).join('').slice(0,2).toUpperCase();}
-function nowStr(){const n=new Date();return n.getDate()+' '+MONTHS[n.getMonth()]+' 2024 '+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');}
+function nowStr(){const n=new Date();return n.getDate()+' '+MONTHS[n.getMonth()]+' '+n.getFullYear()+' '+String(n.getHours()).padStart(2,'0')+':'+String(n.getMinutes()).padStart(2,'0');}
 function fmtDate(d){if(!d)return'';const[y,m,day]=d.split('-');return day+' '+MONTHS[parseInt(m)-1]+' '+y;}
 function calcR(){const f=parseInt(document.getElementById('nm-fee').value)||0,p=parseInt(document.getElementById('nm-pre').value)||0;document.getElementById('nm-rem').value=Math.max(0,f-p)||'';}
 
