@@ -2192,7 +2192,12 @@ async function openModal(){
   }catch(e){}
   document.getElementById('add-modal').classList.add('open');
 }
-function closeModal(){document.getElementById('add-modal').classList.remove('open');}
+function closeModal(){
+  document.getElementById('add-modal').classList.remove('open');
+  const btn=document.querySelector('#add-modal .btn-primary');
+  if(btn){btn.disabled=false;btn.textContent='✓ Müşteriyi Kaydet';}
+  addingCustomer=false;
+}
 
 async function addCustomer(){
   if(addingCustomer)return;
