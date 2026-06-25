@@ -594,6 +594,7 @@ let tableSort={col:'',dir:'asc'};
 let tableRepFilter='';
 let tableColSearch='';
 let panelReadOnly=false;
+let panelSalesView=false; // Satışçı kendi satışlarını görüntülerken: statü/ödeme gizli ama not/belge açık
 let addingCustomer=false;
 
 // Dışarıdan (Google Form vb.) gelen serbest metinleri HTML'e basmadan önce temizler — XSS koruması
@@ -1596,6 +1597,7 @@ const RCLS={ulasildi:'b-completed',cevapsiz:'b-cancelled',sonra_ara:'b-callback'
 
 async function openPanel(id, readonly=false){
   panelReadOnly=readonly;
+  panelSalesView=readonly && CU.role==='sales';
   let c=customers.find(x=>x.id===id);
   
   // Satışlarım sayfasındaki müşteriler customers dizisinde olmayabilir, backend'den al
@@ -1865,7 +1867,7 @@ async function openPanel(id, readonly=false){
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:7px;border:1px solid var(--border)">
         <span style="font-size:12px;color:var(--text)">📄 ${d.doc_name}</span>
         <div style="display:flex;align-items:center;gap:6px">
-        ${panelReadOnly
+        ${panelReadOnly && !panelSalesView
           ?`<span class="badge ${d.status==='Onaylandı'?'b-docs-done':d.status==='Yüklendi'?'b-ops':'b-lead'}">${d.status}</span>`
           :`<select class="sel" style="font-size:11px;padding:3px 8px;width:auto" onchange="updateDocStatus('${c.id}','${d.doc_name}',this.value)">
             <option value="Bekleniyor" ${d.status==='Bekleniyor'?'selected':''}>⏳ Bekleniyor</option>
@@ -1876,7 +1878,7 @@ async function openPanel(id, readonly=false){
         }
         </div>
       </div>`;}).join('')}
-    ${(!panelReadOnly&&(CU.role==='management'||CU.role==='evrak'||CU.role==='sales'))?`
+    ${(!panelReadOnly||panelSalesView)&&(CU.role==='management'||CU.role==='evrak'||CU.role==='sales')?`
     <div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
       <input class="fi2" id="new-doc-${c.id}" type="text" placeholder="Belge adı (örn: Davet Mektubu)" style="padding:6px;flex:1;font-size:11px">
       <button class="btn btn-primary btn-sm" onclick="addNewDocument('${c.id}')">+ Ekle</button>
@@ -1893,11 +1895,11 @@ async function openPanel(id, readonly=false){
     <div class="ps-body" style="display:flex;flex-direction:column;gap:6px" id="file-list-${c.id}">
       <div style="font-size:12px;color:var(--text3)">Dosyalar yükleniyor...</div>
     </div>
-    ${panelReadOnly?'':` <div style="margin-top:8px;padding:10px;background:var(--surface2);border:2px dashed var(--border);border-radius:8px;text-align:center">
+    ${(!panelReadOnly||panelSalesView)?` <div style="margin-top:8px;padding:10px;background:var(--surface2);border:2px dashed var(--border);border-radius:8px;text-align:center">
       <input type="file" id="file-input-${c.id}" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx" style="display:none" onchange="uploadFile('${c.id}',this)">
       <button class="btn btn-ghost btn-sm" onclick="document.getElementById('file-input-${c.id}').click()">📎 Dosya Seç ve Yükle</button>
       <div style="font-size:10px;color:var(--text3);margin-top:4px">JPG, PNG, PDF, DOC, DOCX · Max 15MB</div>
-    </div>`}
+    </div>`:''}  
   </div>
 
   <div class="ps" id="cl-${c.id}">
@@ -1917,7 +1919,7 @@ async function openPanel(id, readonly=false){
             ${cl.note?'<div style="font-size:11px;color:var(--text2);margin-top:4px">📌 '+cl.note+'</div>':''}
           </div>
         </div>`).join('')}</div>
-      ${panelReadOnly?'':` <div style="margin-top:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
+      ${(!panelReadOnly||panelSalesView)?` <div style="margin-top:12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:8px">
         <div style="font-size:11px;font-weight:600;color:var(--text2)">+ Yeni Arama Kaydı</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap">
           <select class="sel" id="cl-r-${c.id}" style="flex:1;min-width:140px">
@@ -1926,7 +1928,7 @@ async function openPanel(id, readonly=false){
           <input class="fi2" id="cl-n-${c.id}" placeholder="Kısa not..." style="flex:2;min-width:140px">
         </div>
         <button class="btn btn-primary btn-sm" style="align-self:flex-start" onclick="addCall('${c.id}')">📞 Kaydet</button>
-      </div>`}
+      </div>`:''}  
     </div>
   </div>
 
@@ -1934,10 +1936,10 @@ async function openPanel(id, readonly=false){
     <div class="ps-head"><div class="ps-title">📝 Notlar <span style="font-weight:400;color:var(--text2)">(${notes.length})</span></div></div>
     <div class="ps-body">
       <div id="nl-${c.id}">${notes.length?notes.map(n=>`<div class="note-item"><div class="note-text">${n.text}</div><div class="note-meta">📝 ${n.author} — ${n.date}</div></div>`).join(''):'<div style="font-size:12px;color:var(--text3);padding:4px 0">Henüz not yok.</div>'}</div>
-      ${panelReadOnly?'':` <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
+      ${(!panelReadOnly||panelSalesView)?` <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">
         <textarea class="fi2" id="ni-${c.id}" rows="3" placeholder="Not ekle — aşama durumu, özel talepler, hatırlatmalar..."></textarea>
         <button class="btn btn-primary btn-sm" style="align-self:flex-start" onclick="saveNote('${c.id}')">📝 Kaydet</button>
-      </div>`}
+      </div>`:''}  
     </div>
   </div>
 
