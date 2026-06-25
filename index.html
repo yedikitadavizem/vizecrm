@@ -883,6 +883,9 @@ async function renderDash(){
   document.getElementById('main-content').innerHTML=`<div id="dash-filterbar"></div><div id="dash-body"></div>`;
   renderDashFilterBar();
   if(!analyticsData) await loadAnalytics();
+  // Başvuru ücretlerini arka planda çek
+  fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getApplicationFees',token:CU.token})})
+    .then(r=>r.json()).then(d=>{window.totalAppFees=d.total||0;renderDashBody();}).catch(()=>{});
   renderDashBody();
 }
 
@@ -1110,7 +1113,7 @@ function staleFilesPanelHTML(staleList){
 function renderDashBody(){
   const all=getDashFiltered();
   const activeCount=all.filter(c=>c.status!=='Tamamlandı'&&c.status!=='İptal').length;
-  const totalCollected=all.reduce((s,c)=>s+(c.prepay||0),0);
+  const totalCollected=all.reduce((s,c)=>s+(c.prepay||0),0)+(window.totalAppFees||0);
   const pendingList=all.filter(c=>(c.fee||0)-(c.prepay||0)>0);
   const pendingTotal=pendingList.reduce((s,c)=>s+((c.fee||0)-(c.prepay||0)),0);
   const cancelledCount=all.filter(c=>c.status==='İptal').length;
@@ -1735,15 +1738,17 @@ async function openPanel(id, readonly=false){
             ${ap.appt_center?`<span>📍 ${ap.appt_center}</span>`:''}
           </div>
           ${ap.notes?`<div style="font-size:11px;color:var(--text3);margin-top:6px;border-top:1px solid var(--border);padding-top:6px">📌 ${ap.notes}</div>`:''}
-          ${panelReadOnly?'':` <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:6px;padding-top:8px;border-top:1px solid var(--border)">
+          <div style="font-size:12px;font-weight:700;color:var(--accent);margin-top:4px">${ap.fee?'₺'+Number(ap.fee).toLocaleString('tr-TR'):''}</div>
+          ${panelReadOnly?'':`<div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:6px;padding-top:8px;border-top:1px solid var(--border)">
             <input class="fi2" type="text" id="ap-apn-${ap.id}" value="${ap.applicant_name||''}" placeholder="Başvuran adı" style="padding:5px;font-size:11px">
+            <input class="fi2" type="number" id="ap-fee-${ap.id}" value="${ap.fee||''}" placeholder="Ücret (₺)" style="padding:5px;font-size:11px">
             <select class="fi2" id="ap-apc-${ap.id}" style="padding:5px;font-size:11px">
               <option value="">Merkez seç...</option>
               ${['İstanbul','Ankara','İzmir','Antalya','Gaziantep'].map(m=>`<option value="${m}" ${ap.appt_center===m?'selected':''}>${m}</option>`).join('')}
             </select>
             <input class="fi2" type="date" id="ap-apd-${ap.id}" value="${ap.appt_date||''}" style="padding:5px;font-size:11px">
             <input class="fi2" type="time" id="ap-apt-${ap.id}" value="${ap.appt_time||''}" style="padding:5px;font-size:11px">
-            <input class="fi2" type="text" id="ap-apn2-${ap.id}" value="${ap.notes||''}" placeholder="Not..." style="padding:5px;font-size:11px;grid-column:span 2">
+            <input class="fi2" type="text" id="ap-apn2-${ap.id}" value="${ap.notes||''}" placeholder="Not..." style="padding:5px;font-size:11px">
             <button class="btn btn-primary btn-sm" style="grid-column:span 2" onclick="updateApplication('${c.id}','${ap.id}')">💾 Güncelle</button>
           </div>`}
         </div>`).join('')}
@@ -1761,7 +1766,8 @@ async function openPanel(id, readonly=false){
             <option value="">Merkez...</option>
             ${['İstanbul','Ankara','İzmir','Antalya','Gaziantep'].map(m=>`<option>${m}</option>`).join('')}
           </select>
-          <input class="fi2" type="text" id="new-ap-notes-${c.id}" placeholder="Not..." style="padding:5px;font-size:11px">
+          <input class="fi2" type="number" id="new-ap-fee-${c.id}" placeholder="Ücret (₺)" style="padding:5px;font-size:11px">
+          <input class="fi2" type="text" id="new-ap-notes-${c.id}" placeholder="Not..." style="padding:5px;font-size:11px;grid-column:span 2">
           <button class="btn btn-primary btn-sm" style="grid-column:span 2" onclick="addApplication('${c.id}')">+ Ekle</button>
         </div>
       </div>`}
@@ -2292,8 +2298,9 @@ async function addApplication(id){
   const apptTime=document.getElementById('new-ap-time-'+id)?.value||'';
   const apptCenter=document.getElementById('new-ap-center-'+id)?.value||'';
   const text=document.getElementById('new-ap-notes-'+id)?.value.trim()||'';
+  const fee=parseInt(document.getElementById('new-ap-fee-'+id)?.value)||0;
   try{
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addApplication',customerId:id,country,name,apptDate,apptTime,apptCenter,text,token:CU.token})});
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addApplication',customerId:id,country,name,apptDate,apptTime,apptCenter,text,fee,token:CU.token})});
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Eklenemedi'),'red');return;}
     await openPanel(id);
@@ -2306,9 +2313,9 @@ async function updateApplication(customerId,appId){
   const apptTime=document.getElementById('ap-apt-'+appId)?.value||'';
   const apptCenter=document.getElementById('ap-apc-'+appId)?.value||'';
   const text=document.getElementById('ap-apn2-'+appId)?.value.trim()||'';
-  const country=document.querySelector(`[id="ap-apc-${appId}"]`)?.closest('.ps-body > div')?.querySelector('div:first-child div')?.textContent||'';
+  const fee=parseInt(document.getElementById('ap-fee-'+appId)?.value)||0;
   try{
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateApplication',customerId,companionId:appId,name,apptDate,apptTime,apptCenter,text,token:CU.token})});
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateApplication',customerId,companionId:appId,name,apptDate,apptTime,apptCenter,text,fee,token:CU.token})});
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Güncellenemedi'),'red');return;}
     await openPanel(customerId);
