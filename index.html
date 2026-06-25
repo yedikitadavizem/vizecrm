@@ -1876,7 +1876,7 @@ async function openPanel(id, readonly=false){
         }
         </div>
       </div>`;}).join('')}
-    ${(!panelReadOnly&&(CU.role==='management'||CU.role==='evrak'))?`
+    ${(!panelReadOnly&&(CU.role==='management'||CU.role==='evrak'||CU.role==='sales'))?`
     <div style="display:flex;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)">
       <input class="fi2" id="new-doc-${c.id}" type="text" placeholder="Belge adı (örn: Davet Mektubu)" style="padding:6px;flex:1;font-size:11px">
       <button class="btn btn-primary btn-sm" onclick="addNewDocument('${c.id}')">+ Ekle</button>
