@@ -891,10 +891,17 @@ async function renderDash(){
 }
 
 // ---- DASHBOARD FİLTRELERİ (dönem / temsilci / ülke) ----
-let dashPeriod='all', dashRep='', dashCountry='';
+let dashPeriod='all', dashRep='', dashCountry='', dashDateFrom='', dashDateTo='';
 const DASH_PERIODS=[['all','Tüm Zamanlar'],['today','Bugün'],['week','Bu Hafta'],['month','Bu Ay'],['quarter','Bu Çeyrek'],['year','Bu Yıl']];
 
 function inDashPeriod(c,period){
+  if(period==='custom'){
+    if(!c.created)return false;
+    const d=new Date(c.created);
+    if(dashDateFrom){const f=new Date(dashDateFrom);f.setHours(0,0,0,0);if(d<f)return false;}
+    if(dashDateTo){const t=new Date(dashDateTo);t.setHours(23,59,59,999);if(d>t)return false;}
+    return true;
+  }
   if(period==='all')return true;
   if(!c.created)return false;
   const d=new Date(c.created),now=new Date();
@@ -915,12 +922,19 @@ function getDashFiltered(){
 function renderDashFilterBar(){
   const reps=[...new Set(customers.map(c=>c.rep).filter(r=>r&&r!=='—'))].sort();
   const countries=[...new Set(customers.map(c=>c.country).filter(Boolean))].sort();
-  const active=dashPeriod!=='all'||dashRep||dashCountry;
+  const active=dashPeriod!=='all'||dashRep||dashCountry||dashDateFrom||dashDateTo;
   document.getElementById('dash-filterbar').innerHTML=`
-  <div class="filter-bar">
-    <select class="sel" onchange="dashPeriod=this.value;renderDashBody()">
+  <div class="filter-bar" style="flex-wrap:wrap;gap:8px">
+    <select class="sel" onchange="dashPeriod=this.value;if(this.value!=='custom'){dashDateFrom='';dashDateTo='';}renderDashFilterBar();renderDashBody()">
       ${DASH_PERIODS.map(([v,l])=>`<option value="${v}" ${dashPeriod===v?'selected':''}>${l}</option>`).join('')}
+      <option value="custom" ${dashPeriod==='custom'?'selected':''}>📅 Tarih Aralığı</option>
     </select>
+    ${dashPeriod==='custom'?`
+    <div style="display:flex;align-items:center;gap:6px">
+      <input type="date" class="fi2" value="${dashDateFrom}" style="padding:5px 8px;font-size:12px;width:140px" onchange="dashDateFrom=this.value;renderDashBody()">
+      <span style="font-size:12px;color:var(--text3)">—</span>
+      <input type="date" class="fi2" value="${dashDateTo}" style="padding:5px 8px;font-size:12px;width:140px" onchange="dashDateTo=this.value;renderDashBody()">
+    </div>`:''}
     <select class="sel" onchange="dashRep=this.value;renderDashBody()">
       <option value="">Tüm Temsilciler</option>
       ${reps.map(r=>`<option value="${r}" ${dashRep===r?'selected':''}>${r}</option>`).join('')}
@@ -929,7 +943,7 @@ function renderDashFilterBar(){
       <option value="">Tüm Ülkeler</option>
       ${countries.map(c=>`<option value="${c}" ${dashCountry===c?'selected':''}>${c}</option>`).join('')}
     </select>
-    ${active?`<button class="btn btn-ghost btn-sm" onclick="dashPeriod='all';dashRep='';dashCountry='';renderDash()">✕ Filtreleri Temizle</button>`:''}
+    ${active?`<button class="btn btn-ghost btn-sm" onclick="dashPeriod='all';dashRep='';dashCountry='';dashDateFrom='';dashDateTo='';renderDash()">✕ Temizle</button>`:''}
   </div>`;
 }
 
@@ -2538,7 +2552,7 @@ async function openModal(){
     const d=await res.json();
     const salesReps=(d.users||[]).filter(u=>u.role==='sales');
     const repSelect=document.getElementById('nm-rep');
-    if(CU.role==='sales'){
+    if(CU.role==='sales'||CU.role==='evrak'||CU.role==='randevu'){
       repSelect.innerHTML=`<option value="${CU.username}">${CU.name} (Ben)</option>`;
       repSelect.disabled=true;
     } else {
