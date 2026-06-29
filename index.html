@@ -538,7 +538,7 @@ if (localStorage.getItem('vizecrm_token')) {
     <div class="fg"><label class="fl2">E-posta</label><input class="fi2" placeholder="ornek@email.com" id="nm-email"></div>
     <div class="form-row">
       <div class="fg"><label class="fl2">Hedef Ülke *</label>
-        <select class="fi2" id="nm-country"><option>🇩🇪 Almanya</option><option>🇬🇧 İngiltere</option><option>🇫🇷 Fransa</option><option>🇮🇹 İtalya</option><option>🇪🇸 İspanya</option><option>🇳🇱 Hollanda</option><option>🇧🇪 Belçika</option><option>🇦🇹 Avusturya</option><option>🇨🇭 İsviçre</option><option>🇵🇹 Portekiz</option><option>🇬🇷 Yunanistan</option><option>🇸🇪 İsveç</option><option>🇳🇴 Norveç</option><option>🇩🇰 Danimarka</option><option>🇵🇱 Polonya</option><option>🇨🇿 Çekya</option><option>🇭🇺 Macaristan</option><option>🇮🇪 İrlanda</option><option>🇫🇮 Finlandiya</option><option>🇷🇴 Romanya</option><option>🇧🇬 Bulgaristan</option><option>🇺🇸 Amerika</option></select></div>
+        <select class="fi2" id="nm-country"><option>🇩🇪 Almanya</option><option>🇬🇧 İngiltere</option><option>🇫🇷 Fransa</option><option>🇮🇹 İtalya</option><option>🇪🇸 İspanya</option><option>🇳🇱 Hollanda</option><option>🇧🇪 Belçika</option><option>🇦🇹 Avusturya</option><option>🇨🇭 İsviçre</option><option>🇵🇹 Portekiz</option><option>🇬🇷 Yunanistan</option><option>🇸🇪 İsveç</option><option>🇳🇴 Norveç</option><option>🇩🇰 Danimarka</option><option>🇵🇱 Polonya</option><option>🇨🇿 Çekya</option><option>🇭🇺 Macaristan</option><option>🇮🇪 İrlanda</option><option>🇫🇮 Finlandiya</option><option>🇷🇴 Romanya</option><option>🇧🇬 Bulgaristan</option><option>🇨🇳 Çin</option><option>🇺🇸 Amerika</option></select></div>
       <div class="fg"><label class="fl2">Vize Türü</label>
         <select class="fi2" id="nm-visa"><option>Schengen Turistik</option><option>Çalışma Vizesi</option><option>Öğrenci Vizesi</option><option>Aile Birleşimi</option></select></div>
     </div>
@@ -1198,7 +1198,7 @@ function renderCusts(){
       <optgroup label="✅ Sonuç"><option>Tamamlandı</option><option>İptal</option></optgroup>
     </select>
     <select class="sel" onchange="fCo(this.value)">
-      <option value="">Tüm ülkeler</option><option>🇩🇪 Almanya</option><option>🇬🇧 İngiltere</option><option>🇫🇷 Fransa</option><option>🇮🇹 İtalya</option><option>🇪🇸 İspanya</option><option>🇳🇱 Hollanda</option><option>🇧🇪 Belçika</option><option>🇦🇹 Avusturya</option><option>🇨🇭 İsviçre</option><option>🇵🇹 Portekiz</option><option>🇬🇷 Yunanistan</option><option>🇸🇪 İsveç</option><option>🇳🇴 Norveç</option><option>🇩🇰 Danimarka</option><option>🇵🇱 Polonya</option><option>🇨🇿 Çekya</option><option>🇭🇺 Macaristan</option><option>🇮🇪 İrlanda</option><option>🇫🇮 Finlandiya</option><option>🇷🇴 Romanya</option><option>🇧🇬 Bulgaristan</option><option>🇺🇸 Amerika</option>
+      <option value="">Tüm ülkeler</option><option>🇩🇪 Almanya</option><option>🇬🇧 İngiltere</option><option>🇫🇷 Fransa</option><option>🇮🇹 İtalya</option><option>🇪🇸 İspanya</option><option>🇳🇱 Hollanda</option><option>🇧🇪 Belçika</option><option>🇦🇹 Avusturya</option><option>🇨🇭 İsviçre</option><option>🇵🇹 Portekiz</option><option>🇬🇷 Yunanistan</option><option>🇸🇪 İsveç</option><option>🇳🇴 Norveç</option><option>🇩🇰 Danimarka</option><option>🇵🇱 Polonya</option><option>🇨🇿 Çekya</option><option>🇭🇺 Macaristan</option><option>🇮🇪 İrlanda</option><option>🇫🇮 Finlandiya</option><option>🇷🇴 Romanya</option><option>🇧🇬 Bulgaristan</option><option>🇨🇳 Çin</option><option>🇺🇸 Amerika</option>
     </select>
     ${hasColFilter?`<button class="btn btn-ghost btn-sm" onclick="resetTableFilters()">✕ Kolon filtrelerini temizle</button>`:''}
   </div>
@@ -1698,7 +1698,7 @@ async function openPanel(id, readonly=false){
         <div class="fi"><div class="fl">E-posta</div><input class="fi2" id="ed-email-${c.id}" value="${c.email||''}" style="padding:6px;width:100%" ${panelReadOnly?'disabled':''}></div>
         <div class="fi"><div class="fl">TC</div><input class="fi2" id="ed-tc-${c.id}" value="${c.tc||''}" placeholder="TC Kimlik No" style="padding:6px;width:100%" maxlength="11" ${panelReadOnly?'disabled':''}></div>
         <div class="fi"><div class="fl">Ülke</div><select class="fi2" id="ed-country-${c.id}" style="padding:6px;width:100%" ${panelReadOnly?'disabled':''}>
-          ${['🇩🇪 Almanya','🇬🇧 İngiltere','🇫🇷 Fransa','🇮🇹 İtalya','🇪🇸 İspanya','🇳🇱 Hollanda','🇧🇪 Belçika','🇦🇹 Avusturya','🇨🇭 İsviçre','🇵🇹 Portekiz','🇬🇷 Yunanistan','🇸🇪 İsveç','🇳🇴 Norveç','🇩🇰 Danimarka','🇵🇱 Polonya','🇨🇿 Çekya','🇭🇺 Macaristan','🇮🇪 İrlanda','🇫🇮 Finlandiya','🇷🇴 Romanya','🇧🇬 Bulgaristan','🇺🇸 Amerika'].map(o=>`<option ${c.country===o?'selected':''}>${o}</option>`).join('')}
+          ${['🇩🇪 Almanya','🇬🇧 İngiltere','🇫🇷 Fransa','🇮🇹 İtalya','🇪🇸 İspanya','🇳🇱 Hollanda','🇧🇪 Belçika','🇦🇹 Avusturya','🇨🇭 İsviçre','🇵🇹 Portekiz','🇬🇷 Yunanistan','🇸🇪 İsveç','🇳🇴 Norveç','🇩🇰 Danimarka','🇵🇱 Polonya','🇨🇿 Çekya','🇭🇺 Macaristan','🇮🇪 İrlanda','🇫🇮 Finlandiya','🇷🇴 Romanya','🇧🇬 Bulgaristan','🇨🇳 Çin','🇺🇸 Amerika'].map(o=>`<option ${c.country===o?'selected':''}>${o}</option>`).join('')}
         </select></div>
         <div class="fi"><div class="fl">Vize Türü</div><select class="fi2" id="ed-visa-${c.id}" style="padding:6px;width:100%" ${panelReadOnly?'disabled':''}>
           <option ${c.visa==='Schengen Turistik'?'selected':''}>Schengen Turistik</option>
@@ -1775,7 +1775,7 @@ async function openPanel(id, readonly=false){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
           <select class="fi2" id="new-ap-country-${c.id}" style="padding:5px;font-size:11px;grid-column:span 2">
             <option value="">Ülke seç *</option>
-            ${['🇩🇪 Almanya','🇬🇧 İngiltere','🇫🇷 Fransa','🇮🇹 İtalya','🇪🇸 İspanya','🇳🇱 Hollanda','🇧🇪 Belçika','🇦🇹 Avusturya','🇨🇭 İsviçre','🇵🇹 Portekiz','🇬🇷 Yunanistan','🇸🇪 İsveç','🇳🇴 Norveç','🇩🇰 Danimarka','🇵🇱 Polonya','🇨🇿 Çekya','🇭🇺 Macaristan','🇮🇪 İrlanda','🇫🇮 Finlandiya','🇷🇴 Romanya','🇧🇬 Bulgaristan','🇺🇸 Amerika'].map(o=>`<option>${o}</option>`).join('')}
+            ${['🇩🇪 Almanya','🇬🇧 İngiltere','🇫🇷 Fransa','🇮🇹 İtalya','🇪🇸 İspanya','🇳🇱 Hollanda','🇧🇪 Belçika','🇦🇹 Avusturya','🇨🇭 İsviçre','🇵🇹 Portekiz','🇬🇷 Yunanistan','🇸🇪 İsveç','🇳🇴 Norveç','🇩🇰 Danimarka','🇵🇱 Polonya','🇨🇿 Çekya','🇭🇺 Macaristan','🇮🇪 İrlanda','🇫🇮 Finlandiya','🇷🇴 Romanya','🇧🇬 Bulgaristan','🇨🇳 Çin','🇺🇸 Amerika'].map(o=>`<option>${o}</option>`).join('')}
           </select>
           <input class="fi2" type="text" id="new-ap-name-${c.id}" placeholder="Başvuran adı (boş=ana müşteri)" style="padding:5px;font-size:11px;grid-column:span 2">
           <input class="fi2" type="date" id="new-ap-date-${c.id}" style="padding:5px;font-size:11px">
