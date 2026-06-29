@@ -856,6 +856,10 @@ function gSearch(q){
 const PRESALE_STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İletişime Geçildi'];
 function fmtTL(n){
   n=n||0;
+  return '₺'+Math.round(n).toLocaleString('tr-TR');
+}
+function fmtTLShort(n){
+  n=n||0;
   if(n>=1000000)return '₺'+(n/1000000).toFixed(2)+'M';
   if(n>=1000)return '₺'+Math.round(n/1000)+'K';
   return '₺'+n.toLocaleString('tr-TR');
@@ -920,6 +924,62 @@ function inDashPeriod(c,period){
 function getDashFiltered(){
   return customers.filter(c=>inDashPeriod(c,dashPeriod)&&(!dashRep||c.rep===dashRep)&&(!dashCountry||c.country===dashCountry));
 }
+function showPaymentDetail(){
+  const all=getDashFiltered();
+  const paidList=all.filter(c=>(c.prepay||0)>0).sort((a,b)=>{
+    const aDate=a.lastModRaw||a.created||'';
+    const bDate=b.lastModRaw||b.created||'';
+    return bDate.localeCompare(aDate);
+  });
+  const total=paidList.reduce((s,c)=>s+(c.prepay||0),0)+(window.totalAppFees||0);
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  modal.innerHTML=`
+    <div style="background:var(--bg);border-radius:16px;width:100%;max-width:760px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+      <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--text)">💰 Tahsilat Detayı</div>
+          <div style="font-size:13px;color:var(--green);font-weight:600;margin-top:2px">Toplam: ₺${Math.round(total).toLocaleString('tr-TR')}</div>
+        </div>
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>
+      </div>
+      <div style="overflow-y:auto;flex:1">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead style="position:sticky;top:0;background:var(--surface2)">
+            <tr>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Müşteri</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Ülke</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Temsilci</th>
+              <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Ödenen</th>
+              <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Toplam</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Durum</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${paidList.map(c=>{
+              const rem=(c.fee||0)-(c.prepay||0);
+              return `<tr onclick="this.closest('div[style*=fixed]').remove();openPanel('${c.id}')" style="cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+                <td style="padding:10px 16px;font-weight:600;color:var(--text)">${c.name}</td>
+                <td style="padding:10px 16px;color:var(--text2)">${c.country||'—'}</td>
+                <td style="padding:10px 16px;color:var(--text2)">${c.rep||'—'}</td>
+                <td style="padding:10px 16px;text-align:right;color:var(--green);font-weight:600">₺${(c.prepay||0).toLocaleString('tr-TR')}</td>
+                <td style="padding:10px 16px;text-align:right;color:var(--text2)">₺${(c.fee||0).toLocaleString('tr-TR')}</td>
+                <td style="padding:10px 16px">${rem<=0?'<span style="color:var(--green);font-weight:600">✓ Tam</span>':'<span style="color:var(--amber);font-weight:600">₺'+rem.toLocaleString('tr-TR')+' kalan</span>'}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        ${paidList.length===0?'<div style="padding:40px;text-align:center;color:var(--text3)">Filtreli dönemde ödeme yok.</div>':''}
+      </div>
+      <div style="padding:14px 24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:12px;color:var(--text2)">
+        <span>${paidList.length} müşteri</span>
+        <span style="font-weight:600;color:var(--green)">Toplam tahsilat: ₺${Math.round(total).toLocaleString('tr-TR')}</span>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
 function renderDashFilterBar(){
   const reps=[...new Set(customers.map(c=>c.rep).filter(r=>r&&r!=='—'))].sort();
   const countries=[...new Set(customers.map(c=>c.country).filter(Boolean))].sort();
@@ -1129,7 +1189,9 @@ function staleFilesPanelHTML(staleList){
 function renderDashBody(){
   const all=getDashFiltered();
   const activeCount=all.filter(c=>c.status!=='Tamamlandı'&&c.status!=='İptal').length;
+  // Başvuru ücretleri de filtreye dahil - customers'daki toplam
   const totalCollected=all.reduce((s,c)=>s+(c.prepay||0),0)+(window.totalAppFees||0);
+  const paidList=all.filter(c=>(c.prepay||0)>0).sort((a,b)=>(b.prepay||0)-(a.prepay||0));
   const pendingList=all.filter(c=>(c.fee||0)-(c.prepay||0)>0);
   const pendingTotal=pendingList.reduce((s,c)=>s+((c.fee||0)-(c.prepay||0)),0);
   const cancelledCount=all.filter(c=>c.status==='İptal').length;
@@ -1143,7 +1205,7 @@ function renderDashBody(){
 
   document.getElementById('dash-body').innerHTML=`
   <div class="stats-grid-5">
-    <div class="stat-card c-green"><div class="stat-icon" style="background:var(--green-bg);color:var(--green)">💰</div><div class="stat-val" style="color:var(--green)">${fmtTL(totalCollected)}</div><div class="stat-label">Toplam Tahsilat</div></div>
+    <div class="stat-card c-green" style="cursor:pointer" onclick="showPaymentDetail()"><div class="stat-icon" style="background:var(--green-bg);color:var(--green)">💰</div><div class="stat-val" style="color:var(--green)">${fmtTL(totalCollected)}</div><div class="stat-label">Toplam Tahsilat</div><div class="stat-trend" style="color:var(--green);font-size:10px">Detay için tıkla →</div></div>
     <div class="stat-card c-amber"><div class="stat-icon" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div class="stat-val" style="color:var(--amber)">${fmtTL(pendingTotal)}</div><div class="stat-label">Bekleyen Tahsilat</div><div class="stat-trend" style="color:var(--text2)">${pendingList.length} müşteride kalan</div></div>
     <div class="stat-card c-blue"><div class="stat-icon" style="background:var(--accent-l);color:var(--accent)">📂</div><div class="stat-val" style="color:var(--accent)">${activeCount}</div><div class="stat-label">Aktif Başvuru</div></div>
     <div class="stat-card c-red"><div class="stat-icon" style="background:var(--red-bg);color:var(--red)">✕</div><div class="stat-val" style="color:var(--red)">${cancelledCount}</div><div class="stat-label">İptal Edilen</div></div>
