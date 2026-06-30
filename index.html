@@ -951,6 +951,7 @@ function showPaymentDetail(){
               <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Ödenen</th>
               <th style="padding:10px 16px;text-align:right;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Toplam</th>
               <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Durum</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Güncellendi</th>
             </tr>
           </thead>
           <tbody>
@@ -963,6 +964,7 @@ function showPaymentDetail(){
                 <td style="padding:10px 16px;text-align:right;color:var(--green);font-weight:600">₺${(c.prepay||0).toLocaleString('tr-TR')}</td>
                 <td style="padding:10px 16px;text-align:right;color:var(--text2)">₺${(c.fee||0).toLocaleString('tr-TR')}</td>
                 <td style="padding:10px 16px">${rem<=0?'<span style="color:var(--green);font-weight:600">✓ Tam</span>':'<span style="color:var(--amber);font-weight:600">₺'+rem.toLocaleString('tr-TR')+' kalan</span>'}</td>
+                <td style="padding:10px 16px;color:var(--text3);font-size:11px;white-space:nowrap">${c.lastModRaw?fmtDT(c.lastModRaw):'—'}</td>
               </tr>`;
             }).join('')}
           </tbody>
@@ -2553,7 +2555,7 @@ async function moveStatus(id,ns){
   try{
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateCustomerStatus',customerId:id,newStatus:ns,token:CU.token})});
     const d=await res.json();
-    if(!d.success){toast('Hata: '+JSON.stringify(d.error||'İşlem yapılamadı'),'red');return;}
+    if(!d.success){toast('⚠️ '+(d.error||'İşlem yapılamadı'),'red');return;}
     await loadCustomers();
     closePanel();
     if(document.getElementById('cust-tbody'))renderRows();
