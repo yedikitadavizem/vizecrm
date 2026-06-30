@@ -810,19 +810,20 @@ async function initApp(){
     <button class="nav-item" onclick="showPage(\'customers\')"><span class="nav-icon">👥</span> Müşteriler</button>
     <button class="nav-item" onclick="showPage(\'pipeline\')"><span class="nav-icon">🗂</span> Pipeline</button>
     ${!isM?'<button class="nav-item" onclick="showPage(\'sold\')"><span class="nav-icon">📈</span> Satışlarım</button>':''}
+    ${isM?'<button class="nav-item" onclick="showPage(\'consulate\')"><span class="nav-icon">🛂</span> Konsolosluk Takibi</button>':''}
     ${isM?'<div class="sb-sec">Yönetim</div><button class="nav-item" onclick="showPage(\'refunds\')"><span class="nav-icon">↩</span> İadeler'+(refundCount?' <span class="nav-badge">'+refundCount+'</span>':'')+'</button><button class="nav-item" onclick="showPage(\'users\')"><span class="nav-icon">🔐</span> Kullanıcılar</button>':''}
   `;
   document.getElementById('topbar-right').innerHTML=`
     <div class="tb-search" id="tb-search-wrap"><span>🔍</span><input placeholder="Müşteri ara..." oninput="gSearch(this.value)"></div>
     <button class="btn btn-primary" onclick="openModal()">+ Yeni Müşteri</button>
   `;
-  const allowedPages=isM?['dashboard','customers','pipeline','refunds','users','account']:['customers','pipeline','sold','account'];
+  const allowedPages=isM?['dashboard','customers','pipeline','consulate','refunds','users','account']:['customers','pipeline','sold','account'];
   const savedPage=localStorage.getItem('vizecrm_lastpage');
   const startPage=(savedPage&&allowedPages.includes(savedPage))?savedPage:(isM?'dashboard':'customers');
   await showPage(startPage);
 }
 
-const PTITLES={dashboard:'Dashboard',customers:'Müşteriler',pipeline:'Pipeline',sold:'Satışlarım',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
+const PTITLES={dashboard:'Dashboard',customers:'Müşteriler',pipeline:'Pipeline',sold:'Satışlarım',consulate:'Konsolosluk Takibi',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
 async function showPage(p){
   document.getElementById('main-content').innerHTML='';
   document.getElementById('page-title').textContent=PTITLES[p]||p;
@@ -831,8 +832,8 @@ async function showPage(p){
   localStorage.setItem('vizecrm_lastpage',p);
   const searchWrap=document.getElementById('tb-search-wrap');
   if(searchWrap)searchWrap.style.display=(p==='dashboard')?'none':'';
-  if(p==='dashboard'||p==='customers'||p==='pipeline'||p==='refunds')await loadCustomers();
-  await ({dashboard:renderDash,customers:renderCusts,pipeline:renderPipeline,sold:renderSold,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
+  if(p==='dashboard'||p==='customers'||p==='pipeline'||p==='refunds'||p==='consulate')await loadCustomers();
+  await ({dashboard:renderDash,customers:renderCusts,pipeline:renderPipeline,sold:renderSold,consulate:renderConsulate,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
 }
 function gSearch(q){
   const sq=q.toLowerCase().trim();
@@ -979,6 +980,60 @@ function showPaymentDetail(){
   document.body.appendChild(modal);
 }
 
+function showConsulateDetail(){
+  const all=getDashFiltered();
+  const list=all.filter(c=>CONSULATE_WAIT_S.includes(c.status)).sort((a,b)=>b.days-a.days);
+  const modal=document.createElement('div');
+  modal.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.onclick=e=>{if(e.target===modal)modal.remove();};
+  function rowColor(d){
+    if(d>=45) return {bg:'var(--red-bg)',fg:'var(--red)',label:'🔴 '+d+' gün'};
+    if(d>=30) return {bg:'var(--amber-bg)',fg:'var(--amber)',label:'🟡 '+d+' gün'};
+    return {bg:'transparent',fg:'var(--text2)',label:d+' gün'};
+  }
+  modal.innerHTML=`
+    <div style="background:var(--bg);border-radius:16px;width:100%;max-width:760px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+      <div style="padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:var(--text)">🛂 Konsolosluk Sonucu Bekleyenler</div>
+          <div style="font-size:13px;color:#7C3AED;font-weight:600;margin-top:2px">${list.length} müşteri — 🟡 30+ gün, 🔴 45+ gün</div>
+        </div>
+        <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>
+      </div>
+      <div style="overflow-y:auto;flex:1">
+        <table style="width:100%;border-collapse:collapse;font-size:12px">
+          <thead style="position:sticky;top:0;background:var(--surface2)">
+            <tr>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Müşteri</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Ülke</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Aşama</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Süreç Boyunca Sorumlular</th>
+              <th style="padding:10px 16px;text-align:left;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)">Bekleme Süresi</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map(c=>{
+              const rc=rowColor(c.days);
+              return `<tr onclick="this.closest('div[style*=fixed]').remove();openPanel('${c.id}')" style="cursor:pointer;border-bottom:1px solid var(--border);background:${rc.bg}" onmouseover="this.style.opacity=0.8" onmouseout="this.style.opacity=1">
+                <td style="padding:10px 16px;font-weight:600;color:var(--text)">${c.name}</td>
+                <td style="padding:10px 16px;color:var(--text2)">${c.country||'—'}</td>
+                <td style="padding:10px 16px;color:var(--text2)">${c.status}</td>
+                <td style="padding:10px 16px;font-size:11px;line-height:1.6">
+                  <div><span style="color:#2563EB;font-weight:600">📞</span> ${c.rep||'—'}</div>
+                  <div><span style="color:#D97706;font-weight:600">📄</span> ${c.evrakRep||'—'}</div>
+                  <div><span style="color:#7C3AED;font-weight:600">📅</span> ${c.randevuRep||'—'}</div>
+                </td>
+                <td style="padding:10px 16px;font-weight:700;color:${rc.fg}">${rc.label}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        ${list.length===0?'<div style="padding:40px;text-align:center;color:var(--text3)">Sonuç bekleyen müşteri yok.</div>':''}
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
 function renderDashFilterBar(){
   const reps=[...new Set(customers.map(c=>c.rep).filter(r=>r&&r!=='—'))].sort();
   const countries=[...new Set(customers.map(c=>c.country).filter(Boolean))].sort();
@@ -1098,7 +1153,8 @@ const FUNNEL_COLORS=['#6B7280','#2563EB','#7C3AED','#D97706','#059669'];
 // ---- OPERASYONEL UYARILAR ----
 const WARN_SALES_S=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İletişime Geçildi'];
 const WARN_EVRAK_S=['Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor'];
-const WARN_RANDEVU_S=['Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor'];
+const WARN_RANDEVU_S=['Randevu Evrakları Tamamlandı'];
+const CONSULATE_WAIT_S=['Başvuru Yapıldı','Sonuç Bekleniyor'];
 
 function buildWarningsHTML(){
   const warnings=[];
@@ -1115,6 +1171,8 @@ function buildWarningsHTML(){
     } else if(WARN_RANDEVU_S.includes(c.status)){
       if(d>=14) warnings.push({level:'crit',c,msg:`${d} gündür güncellenmedi`,dept:'Randevu',icon:'🔴'});
       else if(d>=7) warnings.push({level:'warn',c,msg:`${d} gündür güncellenmedi`,dept:'Randevu',icon:'⚠️'});
+    } else if(CONSULATE_WAIT_S.includes(c.status)){
+      if(d>=20) warnings.push({level:'warn',c,msg:`${d} gündür konsolosluk sonucu bekleniyor — kontrol et`,dept:'Konsolosluk',icon:'🛂'});
     }
   }
   warnings.sort((a,b)=>{
@@ -1195,6 +1253,7 @@ function renderDashBody(){
   const pendingTotal=pendingList.reduce((s,c)=>s+((c.fee||0)-(c.prepay||0)),0);
   const cancelledCount=all.filter(c=>c.status==='İptal').length;
   const staleList=all.filter(c=>c.days>7&&c.status!=='Tamamlandı'&&c.status!=='İptal');
+  const consulateList=all.filter(c=>CONSULATE_WAIT_S.includes(c.status)).sort((a,b)=>b.days-a.days);
   const cycle=avgSalesCycleDays(all);
 
   const byCountry=topGroups(all,c=>c.country);
@@ -1207,8 +1266,8 @@ function renderDashBody(){
     <div class="stat-card c-green" style="cursor:pointer" onclick="showPaymentDetail()"><div class="stat-icon" style="background:var(--green-bg);color:var(--green)">💰</div><div class="stat-val" style="color:var(--green)">${fmtTL(totalCollected)}</div><div class="stat-label">Toplam Tahsilat</div><div class="stat-trend" style="color:var(--green);font-size:10px">Detay için tıkla →</div></div>
     <div class="stat-card c-amber"><div class="stat-icon" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div class="stat-val" style="color:var(--amber)">${fmtTL(pendingTotal)}</div><div class="stat-label">Bekleyen Tahsilat</div><div class="stat-trend" style="color:var(--text2)">${pendingList.length} müşteride kalan</div></div>
     <div class="stat-card c-blue"><div class="stat-icon" style="background:var(--accent-l);color:var(--accent)">📂</div><div class="stat-val" style="color:var(--accent)">${activeCount}</div><div class="stat-label">Aktif Başvuru</div></div>
+    <div class="stat-card c-purple" style="cursor:pointer" onclick="showConsulateDetail()"><div class="stat-icon" style="background:#F3E8FF;color:#7C3AED">🛂</div><div class="stat-val" style="color:#7C3AED">${consulateList.length}</div><div class="stat-label">Sonuç Bekleyenler</div><div class="stat-trend" style="color:#7C3AED;font-size:10px">Detay için tıkla →</div></div>
     <div class="stat-card c-red"><div class="stat-icon" style="background:var(--red-bg);color:var(--red)">✕</div><div class="stat-val" style="color:var(--red)">${cancelledCount}</div><div class="stat-label">İptal Edilen</div></div>
-    <div class="stat-card c-blue"><div class="stat-icon" style="background:var(--accent-l);color:var(--accent)">⏱</div><div class="stat-val" style="color:var(--accent)">${cycle?cycle.avg+' gün':'—'}</div><div class="stat-label">Ort. Satış Süresi</div><div class="stat-trend" style="color:var(--text2)">${cycle?cycle.count+' tamamlanan dosyada':'henüz tamamlanan yok'}</div></div>
   </div>
   ${staleList.length?`<div class="alert alert-red"><div style="display:flex;align-items:center;gap:10px"><span>⚠️</span><div><div style="font-size:13px;font-weight:600;color:var(--red)">${staleList.length} dosya 7+ gün aynı aşamada bekliyor</div><div style="font-size:11px;color:var(--text2);margin-top:1px">Bekleyen dosyalar iade riskini artırır</div></div></div><button class="btn btn-danger btn-sm" onclick="showPage('customers')">Görüntüle →</button></div>`:''}
   ${buildWarningsHTML()}
@@ -1226,7 +1285,7 @@ function renderDashBody(){
 
 function getCurrentHandler(c){
   if(WARN_EVRAK_S.includes(c.status)) return {name:c.evrakRep||'Henüz atanmadı',color:'#D97706'};
-  if(WARN_RANDEVU_S.includes(c.status)||c.status==='Tamamlandı') return {name:c.randevuRep||'Henüz atanmadı',color:'#7C3AED'};
+  if(WARN_RANDEVU_S.includes(c.status)||CONSULATE_WAIT_S.includes(c.status)||c.status==='Tamamlandı') return {name:c.randevuRep||'Henüz atanmadı',color:'#7C3AED'};
   return null;
 }
 function repCellHTML(c){
@@ -1431,6 +1490,46 @@ function renderPipeline(){
 }
 
 // REFUNDS
+function renderConsulate(){
+  const list=customers.filter(c=>CONSULATE_WAIT_S.includes(c.status)).sort((a,b)=>b.days-a.days);
+  function rowColor(d){
+    if(d>=45) return {bg:'var(--red-bg)',fg:'var(--red)',label:'🔴 '+d+' gün'};
+    if(d>=30) return {bg:'var(--amber-bg)',fg:'var(--amber)',label:'🟡 '+d+' gün'};
+    return {bg:'',fg:'var(--text2)',label:d+' gün'};
+  }
+  document.getElementById('main-content').innerHTML=`
+  <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Konsolosluğa başvurusu yapılmış, sonuç bekleyen müşteriler. Bu aşamada operasyonel bir işlem gerekmez — sadece takip amaçlıdır. <span style="color:var(--amber);font-weight:600">🟡 30+ gün</span>, <span style="color:var(--red);font-weight:600">🔴 45+ gün</span> bekleyenler işaretlenir.</div>
+  <div class="tbl-wrap">
+    <div class="tbl-toolbar"><div class="tbl-label">${list.length} Müşteri Sonuç Bekliyor</div></div>
+    <div style="overflow-x:auto">
+    <table class="tbl" style="min-width:920px">
+      <thead><tr>
+        <th>Dosya No</th><th>Ad Soyad</th><th>Telefon</th><th>Ülke</th><th>Aşama</th><th>Süreç Boyunca Sorumlular</th><th>Bekleme Süresi</th>
+      </tr></thead>
+      <tbody>
+        ${list.map(c=>{
+          const rc=rowColor(c.days);
+          return `<tr onclick="openPanel('${c.id}')" style="cursor:pointer;background:${rc.bg}">
+            <td>${c.id}</td>
+            <td><b>${c.name}</b></td>
+            <td><a class="phone-link" href="tel:${c.phone}" onclick="event.stopPropagation()">${c.phone}</a></td>
+            <td>${c.country||'—'}</td>
+            <td><span class="badge ${SCLS[c.status]||'b-lead'}">${c.status}</span></td>
+            <td style="font-size:11px;line-height:1.7">
+              <div><span style="color:#2563EB;font-weight:600">📞 Satış:</span> ${c.rep||'—'}</div>
+              <div><span style="color:#D97706;font-weight:600">📄 Evrak:</span> ${c.evrakRep||'—'}</div>
+              <div><span style="color:#7C3AED;font-weight:600">📅 Randevu:</span> ${c.randevuRep||'—'}</div>
+            </td>
+            <td style="font-weight:700;color:${rc.fg}">${rc.label}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+    ${list.length===0?'<div style="padding:40px;text-align:center;color:var(--text3)">Sonuç bekleyen müşteri yok.</div>':''}
+  </div>`;
+}
+
 function renderRefunds(){
   const pending=customers.filter(c=>c.refundStatus==='Talep Edildi');
   const completed=customers.filter(c=>c.refundStatus==='Gerçekleşti');
