@@ -840,10 +840,12 @@ function gSearch(q){
   if(!sq){
     filtered=[...customers];
   }else{
+    const onCustomersPage=!!document.getElementById('cust-tbody');
     filtered=customers.filter(c=>
+      (!onCustomersPage||!CONSULATE_WAIT_S.includes(c.status))&&(
       (c.name&&c.name.toLowerCase().includes(sq))||
       (c.id&&c.id.toLowerCase().includes(sq))||
-      (c.phone&&c.phone.includes(sq))
+      (c.phone&&c.phone.includes(sq)))
     );
   }
   if(document.getElementById('cust-tbody')){
