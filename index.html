@@ -1843,60 +1843,30 @@ function fmtMonthKey(key) {
 // allPayments boşsa customers.prepay'den fallback (eski sistem)
 // Dönen format: [{fileNo, name, country, rep, amount, date, fee, prepay}]
 function getIncomeItems(period, repFilter, countryFilter) {
-  // "Tüm Zamanlar": her zaman customers.prepay (geçmiş tüm data)
-  // Belirli dönemler: customer_payments varsa kullan (doğru tarih takibi)
-  const useNew = allPayments.length > 0 && period !== 'all';
-  if (useNew) {
-    return allPayments
-      .filter(p => {
-        if (!inMuhPeriod(p.payment_date, period)) return false;
-        if (repFilter || countryFilter) {
-          const c = customers.find(x => x.id === p.customer_file_number);
-          if (repFilter && (c?.rep||'—') !== repFilter) return false;
-          if (countryFilter && (c?.country||'') !== countryFilter) return false;
-        }
-        return true;
-      })
-      .map(p => {
-        const c = customers.find(x => x.id === p.customer_file_number);
-        return {
-          paymentId: p.id || '',
-          fileNo: p.customer_file_number,
-          name: c?.name || p.customers?.full_name || '—',
-          country: c?.country || p.customers?.country || '—',
-          rep: c?.rep || '—',
-          amount: Number(p.amount||0),
-          date: p.payment_date || '',
-          note: p.note || '',
-          fee: c?.fee || 0,
-          prepay: c?.prepay || 0,
-          lastMod: c?.lastMod || '',
-          lastModBy: c?.lastModBy || '',
-        };
-      });
-  } else {
-    // Fallback: customers.prepay + payment_date
-    return customers
-      .filter(c =>
-        (c.prepay||0) > 0 &&
-        inMuhPeriod(c.paymentDate || c.created, period) &&
-        (!repFilter || c.rep === repFilter) &&
-        (!countryFilter || c.country === countryFilter)
-      )
-      .map(c => ({
-        fileNo: c.id,
-        name: c.name,
-        country: c.country || '—',
-        rep: c.rep || '—',
-        amount: c.prepay || 0,
-        date: c.paymentDate || (c.created||'').slice(0,10) || '',
-        note: '',
-        fee: c.fee || 0,
-        prepay: c.prepay || 0,
-        lastMod: c.lastMod || '',
-        lastModBy: c.lastModBy || '',
-      }));
-  }
+  // Her zaman customers.prepay kullan — tüm geçmiş data burada
+  // customer_payments tablosu henüz tüm geçmişi içermiyor
+  // Dönem filtresi payment_date veya created_at üzerinden uygulanır
+  return customers
+    .filter(c =>
+      (c.prepay||0) > 0 &&
+      inMuhPeriod(c.paymentDate || c.created, period) &&
+      (!repFilter || c.rep === repFilter) &&
+      (!countryFilter || c.country === countryFilter)
+    )
+    .map(c => ({
+      paymentId: '',
+      fileNo: c.id,
+      name: c.name,
+      country: c.country || '—',
+      rep: c.rep || '—',
+      amount: c.prepay || 0,
+      date: c.paymentDate || (c.created||'').slice(0,10) || '',
+      note: '',
+      fee: c.fee || 0,
+      prepay: c.prepay || 0,
+      lastMod: c.lastMod || '',
+      lastModBy: c.lastModBy || '',
+    }));
 }
 
 function getMuhData(period) {
