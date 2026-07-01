@@ -1808,6 +1808,7 @@ function getIncomeItems(period, repFilter, countryFilter) {
       .map(p => {
         const c = customers.find(x => x.id === p.customer_file_number);
         return {
+          paymentId: p.id || '',
           fileNo: p.customer_file_number,
           name: c?.name || p.customers?.full_name || '—',
           country: c?.country || p.customers?.country || '—',
@@ -2107,7 +2108,7 @@ function renderMuhasebePage() {
       </div>
     </div>
     <table class="tbl">
-      <thead><tr><th>Tarih</th><th>Dosya No</th><th>Müşteri</th><th>Ülke</th><th>Temsilci</th><th style="text-align:right">Bu Ödeme</th><th>Not</th></tr></thead>
+      <thead><tr><th>Tarih</th><th>Dosya No</th><th>Müşteri</th><th>Ülke</th><th>Temsilci</th><th style="text-align:right">Bu Ödeme</th><th>Not</th><th></th></tr></thead>
       <tbody>
         ${items.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Bu dönemde ödeme kaydı yok</td></tr>':
           items.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>`<tr onclick="openPanel('${p.fileNo}')" style="cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
@@ -2357,6 +2358,53 @@ async function saveExpense(btn) {
     toast('Gider kaydedildi','green');
     await renderMuhasebe();
   } catch(e) { toast('Baglanti hatasi','red'); btn.disabled=false; btn.textContent='Kaydet'; }
+}
+
+function openEditPaymentModal(payId, amount, date, note) {
+  const modal = document.createElement('div');
+  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px';
+  modal.onclick = e => { if (e.target === modal) modal.remove(); };
+  modal.innerHTML = `
+    <div style="background:var(--surface);border-radius:16px;width:100%;max-width:420px;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+      <div style="font-size:15px;font-weight:700;margin-bottom:4px">✏️ Ödeme Düzenle</div>
+      <div style="font-size:11px;color:var(--text3);margin-bottom:16px">Tarih değiştirilemez — hangi aya ait olduğu korunur</div>
+      <div style="display:grid;gap:10px">
+        <div>
+          <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Tarih (değiştirilemez)</label>
+          <input type="date" class="fi2" value="${date}" disabled style="width:100%;padding:7px 10px;opacity:0.6;cursor:not-allowed">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Tutar (₺) *</label>
+          <input type="number" id="edit-pay-amt" class="fi2" value="${amount}" min="1" style="width:100%;padding:7px 10px">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Not</label>
+          <input type="text" id="edit-pay-note" class="fi2" value="${note}" style="width:100%;padding:7px 10px">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button class="btn btn-ghost btn-sm" onclick="this.closest('div[style*=fixed]').remove()">İptal</button>
+        <button class="btn btn-primary btn-sm" id="edit-pay-save" onclick="saveEditPayment('${payId}',this)">✓ Güncelle</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+}
+
+async function saveEditPayment(payId, btn) {
+  const payAmt = parseFloat(document.getElementById('edit-pay-amt').value);
+  const payNote = document.getElementById('edit-pay-note').value.trim();
+  if (!payAmt || payAmt <= 0) { toast('Tutar zorunludur','red'); return; }
+  btn.disabled = true; btn.textContent = '...';
+  try {
+    const res = await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePaymentRecord',payId,payAmt,payNote,token:CU.token})});
+    const d = await res.json();
+    if (!d.success) { toast('Hata: '+(d.error?.message||'Güncellenemedi'),'red'); btn.disabled=false; btn.textContent='✓ Güncelle'; return; }
+    btn.closest('div[style*="fixed"]').remove();
+    toast('✓ Ödeme güncellendi','green');
+    await loadCustomers();
+    await loadAllPayments();
+    renderMuhasebePage();
+  } catch(e) { toast('Bağlantı hatası','red'); btn.disabled=false; btn.textContent='✓ Güncelle'; }
 }
 
 async function deleteExpense(id) {
