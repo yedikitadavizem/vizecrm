@@ -585,7 +585,7 @@ let CU=null;
 const STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'];
 const SCLS={'Yeni Kayıt':'b-lead','Sonra Ara':'b-callback','Ulaşılamıyor':'b-unreachable','İlgileniyor':'b-interested','İlgilenmiyor':'b-notinterested','İletişime Geçildi':'b-contacted','Ödeme Alındı':'b-payment','Belge Bekleniyor':'b-docs-pending','Belgeler Tamam':'b-docs-done','Randevu Aranıyor':'b-appt-search','Randevu Alındı':'b-appt-sched','Randevu Evrakları Hazırlanıyor':'b-docs-pending','Randevu Evrakları Tamamlandı':'b-docs-done','Başvuru Yapıldı':'b-submitted','Sonuç Bekleniyor':'b-waiting','Tamamlandı':'b-completed','İptal':'b-cancelled'};
 const MONTHS=['Oca','Şub','Mar','Nis','May','Haz','Tem','Ağu','Eyl','Eki','Kas','Ara'];
-const RCOLS={'Ece Aydın':'#2563EB','Mehmet Kaya':'#D97706','Ayşe Türk':'#059669','Burak Sarı':'#DC2626','Ceren Yılmaz':'#0891B2','Onur Demir':'#7C3AED','Zehra Kaya':'#0D9488'};
+function repColorHash(name){if(!name||name==='—')return'#2563EB';const cols=['#2563EB','#D97706','#059669','#DC2626','#0891B2','#7C3AED','#0D9488','#DB2777','#EA580C','#65A30D'];let h=0;for(let i=0;i<name.length;i++)h=name.charCodeAt(i)+((h<<5)-h);return cols[Math.abs(h)%cols.length];}
 // Notlar ve aramalar artık customer_notes / customer_calls tablolarından geliyor
 
 let customers=[];
@@ -597,6 +597,7 @@ let panelReadOnly=false;
 let panelSalesView=false;
 let panelPayments=[]; // Satışçı kendi satışlarını görüntülerken: statü/ödeme gizli ama not/belge açık
 let addingCustomer=false;
+let bulkSelected=new Set();
 
 // Dışarıdan (Google Form vb.) gelen serbest metinleri HTML'e basmadan önce temizler — XSS koruması
 function esc(str){
@@ -729,7 +730,7 @@ function mapUser(raw,token){
 }
 
 let idleTimer=null;
-const IDLE_LIMIT_MS=5*60*1000;
+const IDLE_LIMIT_MS=30*60*1000;
 function resetIdleTimer(){
   if(idleTimer)clearTimeout(idleTimer);
   idleTimer=setTimeout(()=>{
@@ -1519,7 +1520,7 @@ function getCurrentHandler(c){
   return null;
 }
 function repCellHTML(c){
-  const salesCol=RCOLS[c.rep]||'#2563EB';
+  const salesCol=repColorHash(c.rep);
   const extra=getCurrentHandler(c);
   let html=`<div style="display:flex;align-items:center;gap:6px"><div class="av av-24" style="background:${salesCol};color:#fff">${initials(c.rep)}</div><span style="font-size:11px;color:var(--text2)">${(c.rep||'—').split(' ')[0]}</span></div>`;
   if(extra){
@@ -1529,6 +1530,72 @@ function repCellHTML(c){
 }
 
 // CUSTOMERS
+
+function updateBulkToolbar(){
+  const tb=document.getElementById('bulk-toolbar');
+  const cnt=document.getElementById('bulk-count');
+  if(!tb||!cnt)return;
+  tb.style.display=bulkSelected.size>0?'flex':'none';
+  cnt.textContent=bulkSelected.size;
+}
+function toggleBulkSelect(cb){
+  if(cb.checked)bulkSelected.add(cb.dataset.id);
+  else bulkSelected.delete(cb.dataset.id);
+  updateBulkToolbar();
+}
+function toggleAllBulk(checked){
+  document.querySelectorAll('.bulk-cb').forEach(cb=>{
+    cb.checked=checked;
+    if(checked)bulkSelected.add(cb.dataset.id);
+    else bulkSelected.delete(cb.dataset.id);
+  });
+  updateBulkToolbar();
+}
+function clearBulkSelection(){
+  bulkSelected.clear();
+  document.querySelectorAll('.bulk-cb').forEach(cb=>cb.checked=false);
+  const all=document.getElementById('bulk-select-all');
+  if(all)all.checked=false;
+  updateBulkToolbar();
+}
+async function bulkTransfer(){
+  const repName=document.getElementById('bulk-rep-sel')?.value;
+  if(!repName){toast('Temsilci seçin','red');return;}
+  if(!bulkSelected.size){toast('Müşteri seçin','red');return;}
+  const ids=[...bulkSelected];
+  if(!confirm(ids.length+' müşteri "'+repName+'" adlı temsilciye transfer edilecek. Devam?'))return;
+  let ok=0;
+  for(const id of ids){
+    try{
+      const r=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'transferCustomer',customerId:id,assignTo:repName,token:CU.token})});
+      const d=await r.json();
+      if(d.success)ok++;
+    }catch(e){}
+  }
+  clearBulkSelection();
+  await loadCustomers();
+  renderRows();
+  toast('✓ '+ok+'/'+ids.length+' müşteri transfer edildi','green');
+}
+async function bulkAddNote(){
+  const text=(document.getElementById('bulk-note-inp')?.value||'').trim();
+  if(!text){toast('Not metni girin','red');return;}
+  if(!bulkSelected.size){toast('Müşteri seçin','red');return;}
+  const ids=[...bulkSelected];
+  if(!confirm(ids.length+' müşteriye not eklenecek. Devam?'))return;
+  let ok=0;
+  for(const id of ids){
+    try{
+      const r=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addNote',customerId:id,text,token:CU.token})});
+      const d=await r.json();
+      if(d.success)ok++;
+    }catch(e){}
+  }
+  clearBulkSelection();
+  const inp=document.getElementById('bulk-note-inp');
+  if(inp)inp.value='';
+  toast('✓ '+ok+'/'+ids.length+' müşteriye not eklendi','green');
+}
 function renderCusts(){
   // Konsolosluk sonucu bekleyen müşteriler ayrı sayfada (Konsolosluk Takibi), bu listede gösterilmez
   filtered=customers.filter(c=>!CONSULATE_WAIT_S.includes(c.status));
@@ -1567,6 +1634,7 @@ function renderCusts(){
     <table class="tbl" style="min-width:960px;transform:rotateX(180deg)">
       <thead>
         <tr>
+          ${CU.role==='management'?'<th style="width:36px"><input type="checkbox" id="bulk-select-all" onchange="toggleAllBulk(this.checked)"></th>':''}
           <th>Dosya No</th>
           <th style="cursor:pointer;user-select:none" onclick="sortTable('name')">Ad Soyad${getSortIcon('name')}</th>
           <th>Telefon</th>
@@ -1611,11 +1679,12 @@ function renderRows(){
   const cc=document.getElementById('cust-count'),tb=document.getElementById('cust-tbody');
   if(!cc||!tb)return;
   cc.textContent=list.length+' Müşteri';
-  if(!list.length){tb.innerHTML='<tr><td colspan="10" style="text-align:center;padding:48px;color:var(--text3)">Müşteri bulunamadı</td></tr>';return;}
+  if(!list.length){tb.innerHTML='<tr><td colspan="'+(CU.role==="management"?'11':'10')+'" style="text-align:center;padding:48px;color:var(--text3)">Müşteri bulunamadı</td></tr>';return;}
   tb.innerHTML=list.map(c=>{
     const rem=c.fee-c.prepay;
     const stale=c.days>7;
     return `<tr onclick="openPanel('${c.id}')">
+      ${CU.role==='management'?'<td onclick="event.stopPropagation()"><input type="checkbox" class="bulk-cb" data-id="'+c.id+'" '+(bulkSelected.has(c.id)?'checked':'')+' onchange="toggleBulkSelect(this)" style="cursor:pointer;width:16px;height:16px"></td>':''}
       <td style="font-family:monospace;font-size:11px;color:var(--text3)">${c.id}</td>
       <td><b>${c.name}</b>${stale?` <span style="font-size:9px;background:var(--red-bg);color:var(--red);border-radius:4px;padding:1px 5px">${c.days}g</span>`:''}</td>
       <td><a class="phone-link" href="tel:${c.phone}" onclick="event.stopPropagation()">${c.phone}</a></td>
@@ -1791,14 +1860,10 @@ const EXP_CATS = ['Kira','Maas','Ofis','Reklam','Ulasim','Diger'];
 async function renderMuhasebe() {
   document.getElementById('main-content').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div>';
   try {
-    const [r1, r2] = await Promise.all([
-      fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getExpenses',token:CU.token})}),
-      fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getPaymentHistory',token:CU.token})})
-    ]);
-    const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
-    expenses = d1.expenses || [];
-    allPayments = d2.payments || [];
-  } catch(e) { expenses = []; allPayments = []; }
+    const r = await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getExpenses',token:CU.token})});
+    const d = await r.json();
+    expenses = d.expenses || [];
+  } catch(e) { expenses = []; }
   renderMuhasebePage();
 }
 
@@ -1903,15 +1968,13 @@ function getMuhData(period) {
   const totalGelir = items.reduce((s,p)=>s+p.amount, 0);
   const uniqueCustCount = new Set(items.map(p=>p.fileNo)).size;
 
-  const payList = []; // Taksit bölümü kaldırıldı
-
   const giderList = expenses.filter(e => inMuhPeriod(e.date, period));
   const totalGider = giderList.reduce((s,e)=>s+(e.amount||0), 0);
   const totalIade = customers.filter(c=>c.refundStatus==='Gerçekleşti').reduce((s,c)=>s+(c.refundAmount||0),0);
   const bekleyenList = customers.filter(c=>(c.fee||0)>(c.prepay||0)&&c.status!=='İptal');
   const totalBekleyen = bekleyenList.reduce((s,c)=>s+((c.fee||0)-(c.prepay||0)),0);
 
-  return { items, payList, giderList, totalGelir, totalGider, totalIade, bekleyenList, totalBekleyen, uniqueCustCount };
+  return { items, giderList, totalGelir, totalGider, totalIade, bekleyenList, totalBekleyen, uniqueCustCount };
 }
 
 function getMonthlyBreakdown() {
@@ -2801,7 +2864,7 @@ async function openPanel(id, readonly=false){
     :qBtnList.map(s=>`<button class="qs-btn ${c.status===s?'active':''}" onclick="moveStatus('${c.id}','${s}')">${s}</button>`).join('');
 
   document.getElementById('panel-body').innerHTML=`
-  ${panelReadOnly?'<div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;padding:8px 14px;font-size:11px;color:#854D0E;margin-bottom:4px">👁 Salt okunur görünüm — bu müşteri artık başka bir ekibin sorumluluğunda.</div>':''}
+  ${panelReadOnly?(panelSalesView?'<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:8px 14px;font-size:11px;color:#1E40AF;margin-bottom:4px">📋 Bu müşteri evrak/randevu aşamasında — statü ve ödeme değiştiremezsiniz, not/arama/belge işlemleri açıktır.</div>':'<div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;padding:8px 14px;font-size:11px;color:#854D0E;margin-bottom:4px">👁 Salt okunur — bu müşteri başka departmanın sorumluluğunda.</div>'):''}
   <div class="ps">
     <div class="ps-head"><div class="ps-title">Müşteri Bilgileri</div></div>
     <div class="ps-body">
@@ -3416,7 +3479,7 @@ async function deletePanelPayment(custId, payId) {
 }
 
 async function updatePayment(id){
-  const fee=parseInt(document.getElementById('ed-fee-'+id)?.value)||0;
+  const fee=parseFloat(document.getElementById('ed-fee-'+id)?.value)||0;
   const prepay=parseInt(document.getElementById('ed-prepay-'+id)?.value)||0;
   if(!fee){toast('Toplam bedel gereklidir','red');return;}
   try{
@@ -3690,7 +3753,7 @@ async function collectKalan(id, totalFee){
   // updatePayment ile yeni toplam = mevcut prepay + girilen tutar
   const cust = customers.find(c=>c.id===id);
   const newPrepay = (cust?.prepay||0) + amount;
-  const fee = parseInt(document.getElementById('ed-fee-'+id)?.value) || totalFee;
+  const fee = parseFloat(document.getElementById('ed-fee-'+id)?.value) || totalFee;
   try {
     const res = await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePayment',customerId:id,fee,prepay:newPrepay,token:CU.token})});
     const d = await res.json();
