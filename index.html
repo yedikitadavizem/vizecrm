@@ -1764,15 +1764,38 @@ function fmtMonthKey(key) {
 }
 
 function getMuhData(period) {
-  const gelirList = customers.filter(c => (c.prepay||0) > 0 && inMuhPeriod(c.paymentDate || c.created, period));
+  // Ciro hesabı: customer_payments tablosundan — her ödeme kendi tarihiyle ayrı satır
+  // Böylece "bu ay 30k, geçen ay 20k" doğru ayrışır
+  const payList = allPayments.filter(p => inMuhPeriod(p.payment_date, period));
+  const totalGelir = payList.reduce((s,p) => s+(Number(p.amount)||0), 0);
+
+  // payList'teki ödemeleri müşteri verisiyle zenginleştir (ülke, temsilci için)
+  const enrichedPayList = payList.map(p => {
+    const cust = customers.find(c => c.id === p.customer_file_number);
+    return {
+      ...p,
+      customerName: cust?.name || p.customers?.full_name || '—',
+      country: cust?.country || p.customers?.country || '—',
+      rep: cust?.rep || '—',
+      fileNo: p.customer_file_number,
+    };
+  });
+
+  // Gider
   const giderList = expenses.filter(e => inMuhPeriod(e.date, period));
-  const payList   = allPayments.filter(p => inMuhPeriod(p.payment_date, period));
-  const totalGelir  = gelirList.reduce((s,c) => s+(c.prepay||0), 0);
-  const totalGider  = giderList.reduce((s,e) => s+(e.amount||0), 0);
-  const totalIade   = customers.filter(c=>c.refundStatus==='Gerçekleşti').reduce((s,c)=>s+(c.refundAmount||0),0);
+  const totalGider = giderList.reduce((s,e) => s+(e.amount||0), 0);
+
+  // İade (tüm zamanlar — dönem filtresiz gösterilir)
+  const totalIade = customers.filter(c=>c.refundStatus==='Gerçekleşti').reduce((s,c)=>s+(c.refundAmount||0),0);
+
+  // Bekleyen tahsilat (dönem bağımsız — anlık borç durumu)
   const bekleyenList = customers.filter(c => (c.fee||0)>(c.prepay||0) && c.status!=='İptal');
   const totalBekleyen = bekleyenList.reduce((s,c)=>s+((c.fee||0)-(c.prepay||0)),0);
-  return { gelirList, giderList, payList, totalGelir, totalGider, totalIade, bekleyenList, totalBekleyen };
+
+  // Kaç farklı müşteriden ödeme geldi
+  const uniqueCustCount = new Set(payList.map(p=>p.customer_file_number)).size;
+
+  return { payList, enrichedPayList, giderList, totalGelir, totalGider, totalIade, bekleyenList, totalBekleyen, uniqueCustCount };
 }
 
 function getMonthlyBreakdown() {
@@ -1799,36 +1822,34 @@ function getMonthlyBreakdown() {
   return Object.entries(monthMap).sort((a,b)=>b[0].localeCompare(a[0]));
 }
 
-function getRepBreakdown(gelirList) {
+function getRepBreakdown(enrichedPayList) {
   const repMap = {};
-  gelirList.forEach(c=>{
-    const k = c.rep||'—';
-    if (!repMap[k]) repMap[k] = {count:0,income:0,fee:0,full:0};
-    repMap[k].count++;
-    repMap[k].income += c.prepay||0;
-    repMap[k].fee += c.fee||0;
-    if ((c.fee||0)>0 && (c.fee||0)===(c.prepay||0)) repMap[k].full++;
+  enrichedPayList.forEach(p=>{
+    const k = p.rep||'—';
+    if (!repMap[k]) repMap[k] = {txnCount:0,income:0};
+    repMap[k].txnCount++;
+    repMap[k].income += Number(p.amount)||0;
   });
   return Object.entries(repMap).sort((a,b)=>b[1].income-a[1].income);
 }
 
-function getCountryBreakdown(gelirList) {
+function getCountryBreakdown(enrichedPayList) {
   const cMap = {};
-  gelirList.forEach(c=>{
-    const k = c.country||'Bilinmiyor';
-    if (!cMap[k]) cMap[k] = {count:0,income:0};
-    cMap[k].count++;
-    cMap[k].income += c.prepay||0;
+  enrichedPayList.forEach(p=>{
+    const k = p.country||'Bilinmiyor';
+    if (!cMap[k]) cMap[k] = {txnCount:0,income:0};
+    cMap[k].txnCount++;
+    cMap[k].income += Number(p.amount)||0;
   });
   return Object.entries(cMap).sort((a,b)=>b[1].income-a[1].income);
 }
 
 function renderMuhasebePage() {
-  const { gelirList, giderList, payList, totalGelir, totalGider, totalIade, bekleyenList, totalBekleyen } = getMuhData(muhPeriod);
+  const { payList, enrichedPayList, giderList, totalGelir, totalGider, totalIade, bekleyenList, totalBekleyen, uniqueCustCount } = getMuhData(muhPeriod);
   const netKar = totalGelir - totalGider;
   const monthly = getMonthlyBreakdown();
-  const repData = getRepBreakdown(gelirList);
-  const countryData = getCountryBreakdown(gelirList);
+  const repData = getRepBreakdown(enrichedPayList);
+  const countryData = getCountryBreakdown(enrichedPayList);
   const maxMonIncome = Math.max(...monthly.map(([,v])=>v.income), 1);
 
   const mc = document.getElementById('main-content');
@@ -1852,7 +1873,7 @@ function renderMuhasebePage() {
     <div class="stat-card c-green" style="cursor:pointer" onclick="document.getElementById('muh-tahsilat').scrollIntoView({behavior:'smooth'})">
       <div class="stat-icon" style="background:var(--green-bg);color:var(--green)">💵</div>
       <div class="stat-val" style="color:var(--green)">${fmtTL(totalGelir)}</div>
-      <div class="stat-label">Tahsilat · ${gelirList.length} müşteri</div>
+      <div class="stat-label">Tahsilat · ${uniqueCustCount} müşteri · ${payList.length} işlem</div>
     </div>
     <div class="stat-card c-red" style="cursor:pointer" onclick="document.getElementById('muh-gider').scrollIntoView({behavior:'smooth'})">
       <div class="stat-icon" style="background:var(--red-bg);color:var(--red)">📤</div>
@@ -1929,15 +1950,15 @@ function renderMuhasebePage() {
         <button class="btn btn-ghost btn-sm" onclick="exportMuhRep()">📥 Excel</button>
       </div>
       <table class="tbl">
-        <thead><tr><th>Temsilci</th><th style="text-align:right">Satış</th><th style="text-align:right">Ciro</th><th style="text-align:right">Ortalama</th><th style="text-align:right">Tam %</th></tr></thead>
+        <thead><tr><th>Temsilci</th><th style="text-align:right">İşlem</th><th style="text-align:right">Ciro</th><th style="text-align:right">Ort./İşlem</th><th style="text-align:right">—</th></tr></thead>
         <tbody>
           ${repData.length===0?'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--text3)">Veri yok</td></tr>':
             repData.map(([rep,v])=>`<tr onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
               <td style="font-weight:600">${rep}</td>
-              <td style="text-align:right;color:var(--text2)">${v.count}</td>
+              <td style="text-align:right;color:var(--text2)">${v.txnCount}</td>
               <td style="text-align:right;color:var(--green);font-weight:700">${fmtTL(v.income)}</td>
-              <td style="text-align:right;color:var(--text2)">${fmtTL(Math.round(v.income/v.count))}</td>
-              <td style="text-align:right;color:${v.full/v.count>=0.7?'var(--green)':'var(--amber)'}">%${Math.round(v.full/v.count*100)}</td>
+              <td style="text-align:right;color:var(--text2)">${fmtTL(Math.round(v.income/v.txnCount))}</td>
+              <td style="text-align:right;color:var(--text3)">—</td>
             </tr>`).join('')
           }
         </tbody>
@@ -1955,9 +1976,9 @@ function renderMuhasebePage() {
           ${countryData.length===0?'<tr><td colspan="4" style="text-align:center;padding:20px;color:var(--text3)">Veri yok</td></tr>':
             countryData.map(([c,v])=>`<tr onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
               <td style="font-weight:600">${c}</td>
-              <td style="text-align:right;color:var(--text2)">${v.count}</td>
+              <td style="text-align:right;color:var(--text2)">${v.txnCount}</td>
               <td style="text-align:right;color:var(--green);font-weight:700">${fmtTL(v.income)}</td>
-              <td style="text-align:right;color:var(--text2)">${fmtTL(Math.round(v.income/v.count))}</td>
+              <td style="text-align:right;color:var(--text2)">${fmtTL(Math.round(v.income/v.txnCount))}</td>
             </tr>`).join('')
           }
         </tbody>
@@ -1993,32 +2014,28 @@ function renderMuhasebePage() {
     </table>
   </div>
 
-  <!-- TAHSİLAT DETAYI -->
+  <!-- ÖDEME DETAYI — customer_payments tablosundan, her ödeme ayrı satır -->
   <div class="tbl-wrap" style="margin-bottom:16px" id="muh-tahsilat">
     <div class="tbl-toolbar">
-      <div class="tbl-label">💵 Müşteri Tahsilat Detayı</div>
+      <div class="tbl-label">💵 Ödeme Detayı</div>
       <div style="display:flex;align-items:center;gap:8px">
-        <span style="font-size:11px;color:var(--text2)">${gelirList.length} müşteri · ${fmtTL(totalGelir)}</span>
+        <span style="font-size:11px;color:var(--text2)">${enrichedPayList.length} işlem · ${fmtTL(totalGelir)}</span>
         <button class="btn btn-ghost btn-sm" onclick="exportMuhTahsilat()">📥 Excel</button>
       </div>
     </div>
     <table class="tbl">
-      <thead><tr><th>Dosya No</th><th>Müşteri</th><th>Ülke</th><th>Temsilci</th><th style="text-align:right">Ödenen</th><th style="text-align:right">Toplam</th><th>Durum</th><th>Ödeme Tarihi</th></tr></thead>
+      <thead><tr><th>Tarih</th><th>Dosya No</th><th>Müşteri</th><th>Ülke</th><th>Temsilci</th><th style="text-align:right">Bu Ödeme</th><th>Not</th></tr></thead>
       <tbody>
-        ${gelirList.length===0?'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Bu dönemde tahsilat yok</td></tr>':
-          gelirList.sort((a,b)=>(b.paymentDate||b.created||'').localeCompare(a.paymentDate||a.created||'')).map(c=>{
-            const rem=(c.fee||0)-(c.prepay||0);
-            return `<tr onclick="openPanel('${c.id}')" style="cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-              <td style="color:var(--text3);font-size:11px">${c.id}</td>
-              <td style="font-weight:600">${c.name}</td>
-              <td style="color:var(--text2)">${c.country||'—'}</td>
-              <td style="color:var(--text2)">${c.rep||'—'}</td>
-              <td style="text-align:right;color:var(--green);font-weight:700">${fmtTL(c.prepay||0)}</td>
-              <td style="text-align:right;color:var(--text2)">${fmtTL(c.fee||0)}</td>
-              <td>${rem<=0?'<span style="color:var(--green);font-weight:600">✓ Tam</span>':'<span style="color:var(--amber);font-weight:600">'+fmtTL(rem)+' kalan</span>'}</td>
-              <td style="color:var(--text3);font-size:11px">${c.paymentDate?fmtDate(c.paymentDate):(c.lastModRaw?fmtDT(c.lastModRaw)+' *':'—')}</td>
-            </tr>`;
-          }).join('')
+        ${enrichedPayList.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Bu dönemde ödeme kaydı yok</td></tr>':
+          enrichedPayList.sort((a,b)=>b.payment_date.localeCompare(a.payment_date)).map(p=>`<tr onclick="openPanel('${p.fileNo}')" style="cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+              <td style="white-space:nowrap;color:var(--text2)">${fmtDate(p.payment_date)}</td>
+              <td style="color:var(--text3);font-size:11px">${p.fileNo}</td>
+              <td style="font-weight:600">${p.customerName}</td>
+              <td style="color:var(--text2)">${p.country}</td>
+              <td style="color:var(--text2)">${p.rep}</td>
+              <td style="text-align:right;color:var(--green);font-weight:700">${fmtTL(Number(p.amount))}</td>
+              <td style="color:var(--text3);font-size:11px">${p.note||'—'}</td>
+            </tr>`).join('')
         }
       </tbody>
     </table>
@@ -2080,7 +2097,7 @@ function exportMuhRep() {
   const repData = getRepBreakdown(gelirList);
   if (!repData.length) { toast('Veri yok','red'); return; }
   const headers = ['Temsilci','Satış Sayısı','Toplam Ciro (₺)','Ortalama (₺)','Tam Ödeme Sayısı','Tam Ödeme %'];
-  const rows = repData.map(([rep,v]) => [rep,v.count,v.income,Math.round(v.income/v.count),v.full,Math.round(v.full/v.count*100)+'%']);
+  const rows = repData.map(([rep,v]) => [rep,v.txnCount,v.income,Math.round(v.income/v.txnCount),'—']);
   const ws = XLSX.utils.aoa_to_sheet([headers,...rows]);
   ws['!cols'] = [{wch:18},{wch:14},{wch:16},{wch:14},{wch:16},{wch:14}];
   const wb = XLSX.utils.book_new();
@@ -2094,7 +2111,7 @@ function exportMuhCountry() {
   const countryData = getCountryBreakdown(gelirList);
   if (!countryData.length) { toast('Veri yok','red'); return; }
   const headers = ['Ülke','Müşteri Sayısı','Toplam Ciro (₺)','Ortalama (₺)'];
-  const rows = countryData.map(([c,v]) => [c,v.count,v.income,Math.round(v.income/v.count)]);
+  const rows = countryData.map(([c,v]) => [c,v.txnCount,v.income,Math.round(v.income/v.txnCount)]);
   const ws = XLSX.utils.aoa_to_sheet([headers,...rows]);
   ws['!cols'] = [{wch:16},{wch:14},{wch:16},{wch:14}];
   const wb = XLSX.utils.book_new();
@@ -2121,19 +2138,18 @@ function exportMuhTaksit() {
 }
 
 function exportMuhTahsilat() {
-  const { gelirList } = getMuhData(muhPeriod);
-  if (!gelirList.length) { toast('Bu dönemde tahsilat yok','red'); return; }
-  const headers = ['Dosya No','Ad Soyad','Ülke','Temsilci','Ödenen (₺)','Toplam Ücret (₺)','Kalan (₺)','Tam Ödeme','Ödeme Tarihi'];
-  const rows = gelirList.sort((a,b)=>(b.paymentDate||b.created||'').localeCompare(a.paymentDate||a.created||'')).map(c=>{
-    const rem=(c.fee||0)-(c.prepay||0);
-    return [c.id,c.name,c.country||'',c.rep||'',c.prepay||0,c.fee||0,rem>0?rem:0,rem<=0?'Evet':'Hayir',c.paymentDate||''];
-  });
+  const { enrichedPayList } = getMuhData(muhPeriod);
+  if (!enrichedPayList.length) { toast('Bu dönemde ödeme yok','red'); return; }
+  const headers = ['Tarih','Dosya No','Müşteri','Ülke','Temsilci','Tutar (₺)','Not'];
+  const rows = enrichedPayList.sort((a,b)=>b.payment_date.localeCompare(a.payment_date)).map(p=>[
+    p.payment_date, p.fileNo, p.customerName, p.country, p.rep, Number(p.amount), p.note||''
+  ]);
   const ws = XLSX.utils.aoa_to_sheet([headers,...rows]);
-  ws['!cols'] = [{wch:16},{wch:22},{wch:14},{wch:16},{wch:12},{wch:14},{wch:10},{wch:10},{wch:14}];
+  ws['!cols'] = [{wch:12},{wch:16},{wch:22},{wch:14},{wch:16},{wch:12},{wch:24}];
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb,ws,'Tahsilat Detayi');
-  XLSX.writeFile(wb,`muhasebe-tahsilat-${new Date().toISOString().slice(0,10)}.xlsx`);
-  toast('✓ Tahsilat detayı indirildi','green');
+  XLSX.utils.book_append_sheet(wb,ws,'Odeme Detayi');
+  XLSX.writeFile(wb,`muhasebe-odemeler-${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('Ödeme detayı indirildi','green');
 }
 
 function exportMuhGider() {
@@ -2167,7 +2183,7 @@ function exportMuhTamRapor() {
     ['Net Kar/Zarar (₺)', netKar],
     ['Bekleyen Tahsilat (₺)', totalBekleyen],
     ['Toplam Iade (₺)', totalIade],
-    ['Odeme Alan Musteri', gelirList.length],
+    ['Odeme Islemi Sayisi', payList.length],
     ['Ort. Musteri Degeri (₺)', gelirList.length?Math.round(totalGelir/gelirList.length):0],
     ['Rapor Tarihi', new Date().toLocaleDateString('tr-TR')],
   ];
@@ -2179,13 +2195,13 @@ function exportMuhTamRapor() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([aylikH,...aylikR]), 'Aylik');
 
   // Sheet 3: Temsilci
-  const repH = ['Temsilci','Satis','Ciro','Ortalama','Tam Odeme'];
-  const repR = repData.map(([r,v])=>[r,v.count,v.income,Math.round(v.income/v.count),Math.round(v.full/v.count*100)+'%']);
+  const repH = ['Temsilci','Islem Sayisi','Ciro','Ortalama'];
+  const repR = repData.map(([r,v])=>[r,v.txnCount,v.income,Math.round(v.income/v.txnCount)]);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([repH,...repR]), 'Temsilci');
 
   // Sheet 4: Ulke
-  const cntH = ['Ulke','Musteri','Ciro','Ortalama'];
-  const cntR = countryData.map(([c,v])=>[c,v.count,v.income,Math.round(v.income/v.count)]);
+  const cntH = ['Ulke','Islem Sayisi','Ciro','Ortalama'];
+  const cntR = countryData.map(([c,v])=>[c,v.txnCount,v.income,Math.round(v.income/v.txnCount)]);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cntH,...cntR]), 'Ulke');
 
   // Sheet 5: Taksitler
@@ -2193,10 +2209,11 @@ function exportMuhTamRapor() {
   const takR = payList.sort((a,b)=>b.payment_date.localeCompare(a.payment_date)).map(p=>[p.payment_date,p.customer_file_number,p.customers?.full_name||'',p.customers?.country||'',p.amount,p.note||'',p.recorded_by||'']);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([takH,...takR]), 'Taksitler');
 
-  // Sheet 6: Tahsilat
-  const tahH = ['Dosya No','Ad Soyad','Ulke','Temsilci','Odenen','Toplam','Kalan','Odeme Tarihi'];
-  const tahR = gelirList.sort((a,b)=>(b.paymentDate||b.created||'').localeCompare(a.paymentDate||a.created||'')).map(c=>{const rem=(c.fee||0)-(c.prepay||0);return[c.id,c.name,c.country||'',c.rep||'',c.prepay||0,c.fee||0,rem>0?rem:0,c.paymentDate||''];});
-  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([tahH,...tahR]), 'Tahsilat');
+  // Sheet 6: Odemeler
+  const { enrichedPayList: epList } = getMuhData(muhPeriod);
+  const tahH = ['Tarih','Dosya No','Musteri','Ulke','Temsilci','Tutar','Not'];
+  const tahR = epList.sort((a,b)=>b.payment_date.localeCompare(a.payment_date)).map(p=>[p.payment_date,p.fileNo,p.customerName,p.country,p.rep,Number(p.amount),p.note||'']);
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([tahH,...tahR]), 'Odemeler');
 
   // Sheet 7: Gider
   const gdrH = ['Tarih','Kategori','Aciklama','Tutar','Kaydeden'];
