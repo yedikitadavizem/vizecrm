@@ -1047,7 +1047,11 @@ function showAllCustomersDetail(){
   }
 
   function renderList(){
-    const list=getFilteredList();
+    const list=getFilteredList().sort((a,b)=>{
+      const aT=a.lastModRaw||a.created||'';
+      const bT=b.lastModRaw||b.created||'';
+      return bT.localeCompare(aT);
+    });
     const countEl=document.getElementById('all-cust-count');
     if(countEl)countEl.textContent=list.length+' müşteri';
     return list.map(c=>{
