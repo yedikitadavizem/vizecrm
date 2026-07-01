@@ -2862,8 +2862,17 @@ async function openPanel(id, readonly=false){
     <div class="pay-row"><div class="pay-lbl">Ön Ödeme Alındı</div><div style="display:flex;align-items:center;gap:8px"><input class="fi2" type="number" id="ed-prepay-${c.id}" value="${c.prepay}" style="padding:6px;width:100px"><span style="font-size:11px;color:var(--text3)">₺</span><button class="btn btn-primary btn-sm" onclick="updatePayment('${c.id}')">✓ Kaydet</button></div></div>
     <div class="pay-row"><div class="pay-lbl">Kalan Ödeme</div><div style="display:flex;align-items:center;gap:8px">
       <div class="pay-val" style="color:${rem>0?'var(--amber)':'var(--green)'}">₺${rem.toLocaleString('tr-TR')}</div>
-      ${rem>0?`<span class="pbadge pb-pend">⏳ Bekliyor</span><button class="btn btn-success btn-sm" onclick="markPaid('${c.id}')">Tahsil ✓</button>`:'<span class="pbadge pb-ok">✓ Tamamlandı</span>'}
+      ${rem>0?'<span class="pbadge pb-pend">⏳ Bekliyor</span>':'<span class="pbadge pb-ok">✓ Tamamlandı</span>'}
     </div></div>
+    ${rem>0&&!panelReadOnly?`
+    <div class="pay-row" style="background:var(--amber-bg);border-left:3px solid var(--amber)">
+      <div class="pay-lbl" style="color:var(--amber);font-weight:600">Kalan Tahsil Et</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <input class="fi2" type="number" id="ed-kalan-${c.id}" placeholder="${rem}" style="padding:6px;width:90px">
+        <span style="font-size:11px;color:var(--text3)">₺</span>
+        <button class="btn btn-success btn-sm" onclick="collectKalan('${c.id}',${c.fee})">✓ Tahsil Et</button>
+      </div>
+    </div>`:''}
     `}
     <div class="pay-row" style="background:var(--surface2)"><div class="pay-lbl" style="font-weight:600">Tahsilat Oranı</div>
       <div style="display:flex;align-items:center;gap:10px;flex:1;max-width:180px">
@@ -2871,26 +2880,6 @@ async function openPanel(id, readonly=false){
         <span style="font-size:12px;font-weight:700;color:${pct>=100?'var(--green)':'var(--amber)'}">%${pct}</span>
       </div>
     </div>
-    ${CU.role==='management'?`
-    <div style="border-top:1px solid var(--border);margin-top:2px;padding-top:10px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:12px;font-weight:600;color:var(--text2)">📋 Taksit Geçmişi</div>
-        <button class="btn btn-primary btn-sm" onclick="openAddPaymentModal('${c.id}')">+ Taksit Ekle</button>
-      </div>
-      <div id="payment-history-${c.id}">
-      ${panelPayments.length===0?
-        '<div style="font-size:11px;color:var(--text3);padding:6px 0">Henüz taksit kaydı yok</div>' :
-        panelPayments.map(p=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--surface2);border-radius:6px;margin-bottom:4px;font-size:12px">
-          <div style="display:flex;flex-direction:column;gap:1px">
-            <span style="font-weight:600;color:var(--green)">+${fmtTL(p.amount)}</span>
-            <span style="color:var(--text3);font-size:10px">${fmtDate(p.payment_date)} · ${p.recorded_by}</span>
-            ${p.note?'<span style="color:var(--text2);font-size:10px">'+esc(p.note)+'</span>':''}
-          </div>
-          <button class="btn btn-danger btn-sm" style="font-size:10px;padding:2px 6px" onclick="deletePanelPayment('${c.id}','`+p.id+`')">Sil</button>
-        </div>`).join('')
-      }
-      </div>
-    </div>`:''}
   </div>
 
 
@@ -3579,6 +3568,25 @@ async function moveStatus(id,ns){
   }catch(e){
     toast('Bağlantı hatası','red');
   }
+}
+async function collectKalan(id, totalFee){
+  const inp = document.getElementById('ed-kalan-'+id);
+  const amount = parseFloat(inp?.value) || 0;
+  if (!amount || amount <= 0) { toast('Tutar giriniz','red'); return; }
+  // updatePayment ile yeni toplam = mevcut prepay + girilen tutar
+  const cust = customers.find(c=>c.id===id);
+  const newPrepay = (cust?.prepay||0) + amount;
+  const fee = parseInt(document.getElementById('ed-fee-'+id)?.value) || totalFee;
+  try {
+    const res = await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePayment',customerId:id,fee,prepay:newPrepay,token:CU.token})});
+    const d = await res.json();
+    if(!d.success){toast('Hata: '+JSON.stringify(d.error||''),'red');return;}
+    await loadCustomers();
+    await loadAllPayments();
+    await openPanel(id);
+    if(document.getElementById('cust-tbody'))renderRows();
+    toast('✓ '+fmtTL(amount)+' tahsil edildi — bugünün tarihi ile kaydedildi','green');
+  } catch(e){ toast('Bağlantı hatası','red'); }
 }
 async function markPaid(id){
   try{
