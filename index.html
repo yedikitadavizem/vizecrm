@@ -2132,7 +2132,7 @@ function getCountryBreakdown(items) {
 }
 
 function renderMuhasebePage() {
-  const { items, payList, giderList, totalGelir, totalGider, totalIade, bekleyenList, totalBekleyen, uniqueCustCount } = getMuhData(muhPeriod);
+  const { items, giderList, custExpList, totalGelir, totalGider, totalCustExp, totalIade, bekleyenList, totalBekleyen, uniqueCustCount } = getMuhData(muhPeriod);
   const netKar = totalGelir - totalGider - totalCustExp;
   const monthly = getMonthlyBreakdown();
   const repData = getRepBreakdown(items);
