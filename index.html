@@ -1619,6 +1619,24 @@ function clearBulkSelection(){
   if(all)all.checked=false;
   updateBulkToolbar();
 }
+async function bulkDelete(){
+  if(!bulkSelected.size){toast('Müşteri seçin','red');return;}
+  const ids=[...bulkSelected];
+  if(!confirm(ids.length+' müşteri kalıcı olarak silinecek. Bu işlem geri alınamaz. Emin misiniz?'))return;
+  let ok=0;
+  for(const id of ids){
+    try{
+      const r=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'deleteCustomer',customerId:id,token:CU.token})});
+      const d=await r.json();
+      if(d.success)ok++;
+    }catch(e){}
+  }
+  clearBulkSelection();
+  await loadCustomers();
+  renderRows();
+  toast('🗑 '+ok+'/'+ids.length+' müşteri silindi','red');
+}
+
 async function bulkTransfer(){
   const repName=document.getElementById('bulk-rep-sel')?.value;
   if(!repName){toast('Temsilci seçin','red');return;}
@@ -1670,6 +1688,18 @@ function renderCusts(){
   const hasColFilter=tableSort.col||tableRepFilter||tableColSearch;
   document.getElementById('main-content').innerHTML=`
   ${renderReminderBanner(todayRem)}
+  <div id="bulk-toolbar" style="display:none;background:var(--accent-l);border:1px solid var(--accent);border-radius:8px;padding:10px 14px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap">
+    <span style="font-size:12px;font-weight:700;color:var(--accent)"><span id="bulk-count">0</span> müşteri seçildi</span>
+    <select id="bulk-rep-sel" class="sel" style="font-size:11px;padding:4px 8px">
+      <option value="">Temsilci Seç...</option>
+      ${reps.map(r=>'<option value="'+r+'">'+r+'</option>').join('')}
+    </select>
+    <button class="btn btn-primary btn-sm" onclick="bulkTransfer()">🔄 Transfer Et</button>
+    <input type="text" id="bulk-note-inp" class="fi2" placeholder="Toplu not..." style="padding:5px 8px;font-size:11px;width:180px">
+    <button class="btn btn-ghost btn-sm" onclick="bulkAddNote()">📝 Not Ekle</button>
+    <button class="btn btn-danger btn-sm" onclick="bulkDelete()">🗑 Sil</button>
+    <button class="btn btn-ghost btn-sm" style="margin-left:auto" onclick="clearBulkSelection()">✕ İptal</button>
+  </div>
   <div class="filter-bar">
     <div class="sw"><input class="si" placeholder="İsim, telefon veya dosya no..." oninput="fC(this.value)"></div>
     <select class="sel" onchange="fS(this.value)">
