@@ -595,7 +595,9 @@ let tableRepFilter='';
 let tableColSearch='';
 let panelReadOnly=false;
 let panelSalesView=false;
-let panelPayments=[]; // Satışçı kendi satışlarını görüntülerken: statü/ödeme gizli ama not/belge açık
+let panelPayments=[];
+let panelCustExpenses=[];
+let allCustExpenses=[];
 let addingCustomer=false;
 let bulkSelected=new Set();
 
@@ -1922,10 +1924,14 @@ const EXP_CATS = ['Kira','Maas','Ofis','Reklam','Ulasim','Diger'];
 async function renderMuhasebe() {
   document.getElementById('main-content').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div>';
   try {
-    const r = await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getExpenses',token:CU.token})});
-    const d = await r.json();
-    expenses = d.expenses || [];
-  } catch(e) { expenses = []; }
+    const [r1,r2] = await Promise.all([
+      fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getExpenses',token:CU.token})}),
+      fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getAllCustomerExpenses',token:CU.token})})
+    ]);
+    const [d1,d2] = await Promise.all([r1.json(),r2.json()]);
+    expenses = d1.expenses || [];
+    allCustExpenses = d2.expenses || [];
+  } catch(e) { expenses = []; allCustExpenses = []; }
   renderMuhasebePage();
 }
 
@@ -2032,11 +2038,17 @@ function getMuhData(period) {
 
   const giderList = expenses.filter(e => inMuhPeriod(e.date, period));
   const totalGider = giderList.reduce((s,e)=>s+(e.amount||0), 0);
+  // Müşteri bazlı giderler: müşterinin ödeme tarihi aya göre dönemle eşleştir
+  const custExpList = allCustExpenses.filter(function(e){
+    const c = customers.find(function(x){return x.id===e.customer_file_number;});
+    return c && inMuhPeriod(c.paymentDate||c.created, period);
+  });
+  const totalCustExp = custExpList.reduce((s,e)=>s+Number(e.amount||0), 0);
   const totalIade = customers.filter(c=>c.refundStatus==='Gerçekleşti').reduce((s,c)=>s+(c.refundAmount||0),0);
   const bekleyenList = customers.filter(c=>(c.fee||0)>(c.prepay||0)&&c.status!=='İptal');
   const totalBekleyen = bekleyenList.reduce((s,c)=>s+((c.fee||0)-(c.prepay||0)),0);
 
-  return { items, giderList, totalGelir, totalGider, totalIade, bekleyenList, totalBekleyen, uniqueCustCount };
+  return { items, giderList, custExpList, totalGelir, totalGider, totalCustExp, totalIade, bekleyenList, totalBekleyen, uniqueCustCount };
 }
 
 function getMonthlyBreakdown() {
@@ -2077,6 +2089,15 @@ function getMonthlyBreakdown() {
     monthMap[k].expense += e.amount||0;
   });
 
+  // Müşteri bazlı gider — müşterinin ödeme ayına yaz
+  allCustExpenses.forEach(function(e) {
+    const c = customers.find(function(x){ return x.id===e.customer_file_number; });
+    const k = getMuhMonthKey(c ? (c.paymentDate||c.created) : '');
+    if (!k) return;
+    if (!monthMap[k]) monthMap[k] = {income:0,expense:0,count:0,refund:0};
+    monthMap[k].expense += Number(e.amount||0);
+  });
+
   // İade
   customers.filter(c=>c.refundStatus==='Gerçekleşti').forEach(c => {
     const k = getMuhMonthKey(c.refundDate||c.paymentDate||c.created);
@@ -2112,7 +2133,7 @@ function getCountryBreakdown(items) {
 
 function renderMuhasebePage() {
   const { items, payList, giderList, totalGelir, totalGider, totalIade, bekleyenList, totalBekleyen, uniqueCustCount } = getMuhData(muhPeriod);
-  const netKar = totalGelir - totalGider;
+  const netKar = totalGelir - totalGider - totalCustExp;
   const monthly = getMonthlyBreakdown();
   const repData = getRepBreakdown(items);
   const countryData = getCountryBreakdown(items);
@@ -2144,7 +2165,12 @@ function renderMuhasebePage() {
     <div class="stat-card c-red" style="cursor:pointer" onclick="document.getElementById('muh-gider').scrollIntoView({behavior:'smooth'})">
       <div class="stat-icon" style="background:var(--red-bg);color:var(--red)">📤</div>
       <div class="stat-val" style="color:var(--red)">${fmtTL(totalGider)}</div>
-      <div class="stat-label">Toplam Gider · ${giderList.length} kayıt</div>
+      <div class="stat-label">Genel Gider · ${giderList.length} kayıt</div>
+    </div>
+    <div class="stat-card c-red">
+      <div class="stat-icon" style="background:var(--red-bg);color:var(--red)">💸</div>
+      <div class="stat-val" style="color:var(--red)">${fmtTL(totalCustExp)}</div>
+      <div class="stat-label">Müşteri Giderleri · ${custExpList.length} kayıt</div>
     </div>
     <div class="stat-card ${netKar>=0?'c-green':'c-red'}">
       <div class="stat-icon" style="background:${netKar>=0?'var(--green-bg)':'var(--red-bg)'};color:${netKar>=0?'var(--green)':'var(--red)'}">📊</div>
@@ -2494,6 +2520,58 @@ function openMuhDetailModal(type, value) {
     tr.addEventListener('mouseout', function(){ tr.style.background=''; });
     tr.addEventListener('click', function(){ m.remove(); openPanel(tr.dataset.fno); });
   });
+}
+
+
+function renderCustExpPanel(custId, exps, readOnly) {
+  var total = exps.reduce(function(s,e){ return s+Number(e.amount||0); }, 0);
+  var list = exps.length===0
+    ? '<div style="font-size:11px;color:var(--text3);padding:4px 0">Henüz gider kaydı yok</div>'
+    : exps.map(function(e){
+        return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--surface2);border-radius:6px;margin-bottom:4px;font-size:12px">'
+          +'<div><span style="font-weight:600;color:var(--red)">-'+fmtTL(Number(e.amount))+'</span>'
+          +(e.description?' <span style="color:var(--text2);font-size:11px">'+esc(e.description)+'</span>':'')
+          +'<div style="font-size:10px;color:var(--text3)">'+e.created_by+' · '+fmtDT(e.created_at)+'</div></div>'
+          +(!readOnly?'<button class="btn btn-danger btn-sm" style="font-size:10px;padding:2px 6px" onclick="deleteCustExpense(\''+custId+'\',\''+e.id+'\')">Sil</button>':'')
+          +'</div>';
+      }).join('');
+  var addForm = !readOnly
+    ? '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
+        +'<input type="number" id="cexp-amt-'+custId+'" class="fi2" placeholder="Tutar ₺" style="padding:5px 8px;width:90px;font-size:12px" min="1">'
+        +'<input type="text" id="cexp-desc-'+custId+'" class="fi2" placeholder="Açıklama (ör: Konsolosluk randevu)" style="padding:5px 8px;flex:1;font-size:12px;min-width:140px">'
+        +'<button class="btn btn-danger btn-sm" onclick="addCustExpense(\''+custId+'\')">+ Gider Ekle</button>'
+        +'</div>'
+    : '';
+  return '<div class="ps">'
+    +'<div class="ps-head"><div class="ps-title">💸 Müşteri Giderleri</div>'
+    +(total>0?'<span style="font-size:11px;color:var(--red);font-weight:600">-'+fmtTL(total)+'</span>':'<span style="font-size:11px;color:var(--text3)">₺0</span>')
+    +'</div>'
+    +'<div style="padding:4px 0">'+list+addForm+'</div>'
+    +'</div>';
+}
+
+async function addCustExpense(custId) {
+  var amt = parseFloat(document.getElementById('cexp-amt-'+custId)?.value);
+  var desc = (document.getElementById('cexp-desc-'+custId)?.value||'').trim();
+  if(!amt||amt<=0){toast('Tutar giriniz','red');return;}
+  try{
+    var res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addCustomerExpense',customerId:custId,custExpAmount:amt,custExpDesc:desc,token:CU.token})});
+    var d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||'Eklenemedi'),'red');return;}
+    toast('-'+fmtTL(amt)+' gider eklendi','green');
+    await openPanel(custId,panelReadOnly);
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
+async function deleteCustExpense(custId, expId) {
+  if(!confirm('Bu gider kaydı silinecek?'))return;
+  try{
+    var res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'deleteCustomerExpense',custExpId:expId,token:CU.token})});
+    var d=await res.json();
+    if(!d.success){toast('Silinemedi','red');return;}
+    toast('Gider silindi','red');
+    await openPanel(custId,panelReadOnly);
+  }catch(e){toast('Bağlantı hatası','red');}
 }
 
 function openAddExpenseModal() {
@@ -2886,6 +2964,7 @@ async function openPanel(id, readonly=false){
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getCustomerDetail',customerId:id,token:CU.token})});
     const d=await res.json();
     panelPayments=(d.payments||[]);
+    panelCustExpenses=(d.customerExpenses||[]);
     notes=(d.notes||[]).map(n=>({text:esc(n.text),author:esc(n.author||'—'),date:fmtDT(n.created_at)}));
     calls=(d.calls||[]).map(cl=>({caller:esc(cl.caller||'—'),date:fmtDT(cl.created_at),result:cl.result,note:esc(cl.note)}));
     documents=(d.documents||[]);
@@ -3122,6 +3201,9 @@ async function openPanel(id, readonly=false){
   </div>
 
 
+
+
+  ${(CU.role==='management'||CU.role==='evrak')?renderCustExpPanel(c.id,panelCustExpenses,panelReadOnly&&!panelSalesView):''}
   <div class="ps">
     <div class="ps-head"><div class="ps-title">Belgeler</div></div>
     <div class="ps-body" style="display:flex;flex-direction:column;gap:6px">
