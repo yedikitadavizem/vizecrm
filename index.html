@@ -546,6 +546,7 @@ if (localStorage.getItem('vizecrm_token')) {
       <div class="fg"><label class="fl2">Satış Temsilcisi</label>
         <select class="fi2" id="nm-rep"><option>Ece Aydın</option><option>Mehmet Kaya</option><option>Ayşe Türk</option><option>Burak Sarı</option><option>Ceren Yılmaz</option><option>Onur Demir</option><option>Zehra Kaya</option></select></div>
       <div class="fg"><label class="fl2">Toplam Bedel (₺)</label><input class="fi2" type="number" placeholder="65000" id="nm-fee" oninput="calcR()"></div>
+      <div class="fg"><label class="fl2">Kayıt Tarihi</label><input class="fi2" type="date" id="nm-reg-date" title="Boş bırakılırsa bugün kaydedilir"></div>
     </div>
     <div class="form-row">
       <div class="fg"><label class="fl2">Ön Ödeme (₺)</label><input class="fi2" type="number" placeholder="32500" id="nm-pre" oninput="calcR()"></div>
@@ -625,7 +626,7 @@ async function loadCustomers(){
       status:r.status,fee:r.service_fee||0,prepay:r.prepayment||0,
       days:r.last_modified_at?Math.max(0,Math.floor((Date.now()-new Date(r.last_modified_at).getTime())/86400000)):0,
       lastMod:fmtDT(r.last_modified_at),
-      created:r.created_at||null,lastModRaw:r.last_modified_at||null,
+      created:r.created_at||null,registrationDate:r.registration_date||'',lastModRaw:r.last_modified_at||null,
       apptDate:r.appt_date||'',apptTime:r.appt_time||'',apptCenter:r.appt_center||'',
       desiredApptDate:r.desired_appt_date||'',confirmedApptDate:r.confirmed_appt_date||'',
       visaStartDate:r.visa_start_date||'',visaEndDate:r.visa_end_date||'',visaRenewal:r.visa_renewal||false,
@@ -968,16 +969,19 @@ let dashPeriod='all', dashRep='', dashCountry='', dashDateFrom='', dashDateTo=''
 const DASH_PERIODS=[['all','Tüm Zamanlar'],['today','Bugün'],['week','Bu Hafta'],['month','Bu Ay'],['quarter','Bu Çeyrek'],['year','Bu Yıl']];
 
 function inDashPeriod(c,period){
+  // Kayıt tarihi (registration_date) varsa onu kullan, yoksa created_at'e düş
+  // Güncelleme tarihine bakma — "Bu Ay" = bu ay kayıt olan müşteriler
+  const effDate = c.registrationDate || c.created;
   if(period==='custom'){
-    if(!c.created)return false;
-    const d=new Date(c.created);
+    if(!effDate)return false;
+    const d=new Date(effDate);
     if(dashDateFrom){const f=new Date(dashDateFrom);f.setHours(0,0,0,0);if(d<f)return false;}
     if(dashDateTo){const t=new Date(dashDateTo);t.setHours(23,59,59,999);if(d>t)return false;}
     return true;
   }
   if(period==='all')return true;
-  if(!c.created)return false;
-  const d=new Date(c.created),now=new Date();
+  if(!effDate)return false;
+  const d=new Date(effDate),now=new Date();
   if(period==='today')return d.toDateString()===now.toDateString();
   if(period==='week'){
     const dow=now.getDay(); const diffToMon=dow===0?6:dow-1;
@@ -1140,8 +1144,9 @@ function showAllCustomersDetail(){
     const q=searchQ.toLowerCase();
     return all.filter(c=>{
       if(q&&!((c.name||'').toLowerCase().includes(q)||(c.id||'').toLowerCase().includes(q)||(c.phone||'').includes(q)))return false;
-      if(regFrom&&(!c.created||c.created.slice(0,10)<regFrom))return false;
-      if(regTo&&(!c.created||c.created.slice(0,10)>regTo))return false;
+      const regDate=(c.registrationDate||c.created||'').slice(0,10);
+      if(regFrom&&(!regDate||regDate<regFrom))return false;
+      if(regTo&&(!regDate||regDate>regTo))return false;
       if(byUser&&c.lastModBy!==byUser)return false;
       if(byRep&&c.rep!==byRep)return false;
       return true;
@@ -2993,7 +2998,8 @@ async function openPanel(id, readonly=false){
   if(!c)return;
   document.getElementById('pn-name').textContent=c.name;
   document.getElementById('pn-fileno').textContent=c.id+' · '+c.country;
-  document.getElementById('pn-lastmod').textContent='🕐 '+c.lastMod;
+  const regDisplay = c.registrationDate ? fmtDate(c.registrationDate) : (c.created ? fmtDT(c.created) : '—');
+  document.getElementById('pn-lastmod').textContent='📅 Kayıt: '+regDisplay+' · 🕐 Son güncelleme: '+c.lastMod;
   document.getElementById('overlay').classList.add('open');
   document.getElementById('detail-panel').classList.add('open');
   document.getElementById('panel-body').innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div>';
@@ -3064,7 +3070,7 @@ async function openPanel(id, readonly=false){
         </select></div>
         <div class="fi"><div class="fl">Satış Temsilcisi</div><div class="fv">${c.rep}</div></div>
         <div class="fi"><div class="fl">Aşamada Gün</div><div class="fv" style="color:${c.days>7?'var(--red)':'var(--text)'}">${c.days} gün</div></div>
-      </div>
+        ${CU.role==='management'?('<div class="fi"><div class="fl">📅 Kayıt Tarihi</div><input type="date" class="fi2" id="ed-regdate-'+c.id+'" value="'+(c.registrationDate||c.created?.slice(0,10)||'')+'"></div>'):''}      </div>
       ${panelReadOnly?'':'<button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="updateCustomerInfo(\''+c.id+'\')">💾 Müşteri Bilgilerini Kaydet</button>'}
     </div>
   </div>
@@ -3595,7 +3601,8 @@ async function updateCustomerInfo(id){
   const tc=document.getElementById('ed-tc-'+id)?.value.trim()||'';
   if(!nm||!ph){toast('Ad ve Telefon zorunludur','red');return;}
   try{
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateCustomerInfo',customerId:id,name:nm,phone:ph,email:em,visa_type:vi,country:co,tc,token:CU.token})});
+    const regD=(document.getElementById('ed-regdate-'+id)?.value)||'';
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateCustomerInfo',customerId:id,name:nm,phone:ph,email:em,visa_type:vi,country:co,tc,registrationDate:regD||null,token:CU.token})});
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
     await loadCustomers();
@@ -4036,7 +4043,8 @@ async function addCustomer(){
   if(!assignTo){toast('Lütfen bir satış temsilcisi seçin','red');addingCustomer=false;return;}
   const btn=document.querySelector('#add-modal .btn-primary');
   if(btn){btn.disabled=true;btn.textContent='Kaydediliyor...';}
-  const payload=JSON.stringify({action:'addCustomer',name,phone,email,country,visa_type,fee,prepay:pre,assignTo,token:CU.token});
+  const regDate=document.getElementById('nm-reg-date')?.value||'';
+  const payload=JSON.stringify({action:'addCustomer',name,phone,email,country,visa_type,fee,prepay:pre,assignTo,registrationDate:regDate||null,token:CU.token});
   let res=null;
   try{
     res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:payload});
