@@ -3672,10 +3672,12 @@ async function deletePanelPayment(custId, payId) {
 }
 
 async function updatePayment(id){
-  const fee=parseFloat(document.getElementById('ed-fee-'+id)?.value)||0;
-  const prepay=parseInt(document.getElementById('ed-prepay-'+id)?.value)||0;
+  const feeEl=document.getElementById('ed-fee-'+id);
+  const fee=feeEl&&feeEl.value!==''?parseFloat(feeEl.value)||0:null;
+  if(fee===null){toast('Toplam bedel gereklidir','red');return;}
+  const prepayEl=document.getElementById('ed-prepay-'+id);
+  const prepay=prepayEl&&prepayEl.value!==''?parseFloat(prepayEl.value)||0:0;
   const paymentDate=document.getElementById('ed-prepay-date-'+id)?.value||'';
-  if(!fee){toast('Toplam bedel gereklidir','red');return;}
   try{
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePayment',customerId:id,fee,prepay,paymentDateOverride:paymentDate||null,token:CU.token})});
     const d=await res.json();
