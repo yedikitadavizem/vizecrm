@@ -1793,7 +1793,7 @@ function renderRows(){
       <td><span class="badge ${SCLS[c.status]||'b-lead'}">${c.status}</span>${c.visaRenewal?'<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;background:#FEF3C7;color:#D97706;margin-left:4px">🔔 Vize Yenileme</span>':''}</td>
       <td>${c.callTotal===0?'<span style="color:var(--text3)">—</span>':`<span style="color:var(--accent);font-weight:700;font-size:12px">📞${c.callTotal}</span><span style="color:var(--green);font-size:10px;margin-left:4px">${c.callReached}✓</span>`}</td>
       <td style="font-size:11px;color:${c.apptDate?'var(--accent)':'var(--text3)'}">${c.apptDate?'📅 '+fmtDate(c.apptDate):'—'}</td>
-      <td style="font-size:11px;color:${rem<=0?'var(--green)':'var(--amber)'};font-weight:600">${rem<=0?'✓ Tam':'₺'+rem.toLocaleString('tr-TR')}</td>
+      <td style="font-size:11px;color:${(c.prepay>0&&rem<=0)?'var(--green)':(c.prepay<=0?'var(--text3)':'var(--amber)')};font-weight:600">${(c.prepay>0&&rem<=0)?'✓ Tam':(c.prepay<=0?'—':'₺'+rem.toLocaleString('tr-TR'))}</td>
       <td>${repCellHTML(c)}</td>
       <td style="font-size:10px;color:var(--text3)">🕐 ${c.lastMod}</td>
     </tr>`;
@@ -1883,7 +1883,7 @@ function renderPipeline(){
           <div class="kcard-phone">${c.phone}</div>
           <div class="kcard-foot">
             <span class="kcard-days ${c.days>7?'stale':''}">${c.days>0?c.days+'g':'bugün'}</span>
-            <span style="font-size:10px;color:${rem<=0?'var(--green)':'var(--amber)'};">${rem<=0?'✓ Ödendi':'₺'+Math.round(rem/1000)+'K'}</span>
+            <span style="font-size:10px;color:${(c.prepay>0&&rem<=0)?'var(--green)':(c.prepay<=0?'var(--text3)':'var(--amber)')}">${(c.prepay>0&&rem<=0)?'✓ Ödendi':(c.prepay<=0?'—':'₺'+Math.round(rem/1000)+'K')}</span>
           </div>
         </div>`;}).join('')}
       </div>
@@ -3233,7 +3233,7 @@ async function openPanel(id, readonly=false){
     <div class="pay-row"><div class="pay-lbl">Ön Ödeme Alındı</div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><input class="fi2" type="number" id="ed-prepay-${c.id}" value="${c.prepay}" style="padding:6px;width:100px"><span style="font-size:11px;color:var(--text3)">₺</span><input type="date" id="ed-prepay-date-${c.id}" class="fi2" style="padding:5px 7px;font-size:11px;width:130px" title="Ödemenin alındığı tarih (boş bırakılırsa bugün)"><button class="btn btn-primary btn-sm" onclick="updatePayment('${c.id}')">✓ Kaydet</button></div></div>
     <div class="pay-row"><div class="pay-lbl">Kalan Ödeme</div><div style="display:flex;align-items:center;gap:8px">
       <div class="pay-val" style="color:${rem>0?'var(--amber)':'var(--green)'}">₺${rem.toLocaleString('tr-TR')}</div>
-      ${rem>0?'<span class="pbadge pb-pend">⏳ Bekliyor</span>':'<span class="pbadge pb-ok">✓ Tamamlandı</span>'}
+      ${rem>0?'<span class="pbadge pb-pend">⏳ Bekliyor</span>':(c.prepay>0?'<span class="pbadge pb-ok">✓ Tamamlandı</span>':'<span class="pbadge" style="background:var(--surface2);color:var(--text3)">— Girilmedi</span>')}
     </div></div>
     ${rem>0&&!panelReadOnly?`
     <div class="pay-row" style="background:var(--amber-bg);border-left:3px solid var(--amber)">
