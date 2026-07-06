@@ -1845,7 +1845,9 @@ function renderRows(){
         '<span style="font-weight:700;color:var(--text)">👤 '+ap.name+'</span>'+
         '<span style="color:var(--text2)">📅 '+(ap.date?fmtDate(ap.date):'Tarih girilmedi')+'</span>'+
         (ap.center?'<span style="color:var(--text3)">📍 '+ap.center+'</span>':'')+
-        '<span style="color:var(--amber);font-size:10px;font-weight:600">⏳ Randevu Bekliyor</span>'+
+        (ap.status==='Randevu Alındı'
+          ?'<span style="color:var(--accent);font-size:10px;font-weight:600">📅 Randevu Alındı</span>'
+          :'<span style="color:var(--amber);font-size:10px;font-weight:600">⏳ Randevu Bekliyor</span>')+
         '</div>'
       ).join('')+
       '</div></td></tr>'
