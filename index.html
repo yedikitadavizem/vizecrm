@@ -599,6 +599,7 @@ let panelSalesView=false;
 let panelPayments=[];
 let panelCustExpenses=[];
 let allCustExpenses=[];
+let panelApps=[];
 let addingCustomer=false;
 let bulkSelected=new Set();
 
@@ -3111,9 +3112,15 @@ async function openPanel(id, readonly=false){
       ${applications.length===0?'<div style="font-size:12px;color:var(--text3)">Henüz başvuru eklenmedi.</div>':''}
       ${applications.map(ap=>`
         <div style="background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:12px 14px">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:6px;flex-wrap:wrap">
             <div style="font-size:13px;font-weight:700;color:var(--text)">${ap.country||'—'}</div>
-            ${panelReadOnly?'':`<button class="btn btn-danger btn-sm" onclick="deleteApplication('${c.id}','${ap.id}')">✕</button>`}
+            <div style="display:flex;align-items:center;gap:6px">
+              ${ap.status==='Tamamlandı'
+                ? '<span style="background:var(--green-bg);color:var(--green);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px">✓ Başvuru Yapıldı</span>'
+                : (ap.appt_date&&!panelReadOnly?'<button class="btn btn-success btn-sm" style="font-size:10px;padding:3px 8px" onclick="markApplicationDone(\''+c.id+'\',\''+ap.id+'\')">✓ Başvuru Yapıldı</button>':'<span style="background:var(--amber-bg);color:var(--amber);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px">⏳ Bekliyor</span>')
+              }
+              ${panelReadOnly?'':`<button class="btn btn-danger btn-sm" onclick="deleteApplication('${c.id}','${ap.id}')">✕</button>`}
+            </div>
           </div>
           <div style="font-size:11px;color:var(--text2);display:flex;flex-wrap:wrap;gap:8px">
             ${ap.applicant_name?`<span>👤 ${ap.applicant_name}</span>`:''}
@@ -3851,6 +3858,34 @@ async function deleteCustomer(id){
   }catch(e){
     toast('Bağlantı hatası','red');
   }
+}
+
+
+async function markApplicationDone(custId, appId) {
+  if (!confirm('Bu kişinin başvurusu yapıldı olarak işaretlenecek. Onaylıyor musunuz?')) return;
+  try {
+    const res = await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateApplicationStatus',customerId:custId,appId,appStatus:'Tamamlandı',token:CU.token})});
+    const d = await res.json();
+    if (!d.success) { toast('Hata: '+(d.error?.message||'Güncellenemedi'),'red'); return; }
+    toast('✓ Başvuru yapıldı olarak işaretlendi','green');
+    await openPanel(custId, panelReadOnly);
+  } catch(e) { toast('Bağlantı hatası','red'); }
+}
+
+// Başvuru Yapıldı durumuna geçmeden önce bekleyen randevu kontrolü
+function checkPendingApplications(custId, newStatus, applications) {
+  if (newStatus !== 'Başvuru Yapıldı') return true;
+  const pending = applications.filter(ap => ap.status !== 'Tamamlandı' && ap.appt_date);
+  if (pending.length === 0) return true;
+  const names = pending.map(ap => {
+    const nm = ap.applicant_name || 'Ana başvuru';
+    const dt = ap.appt_date ? fmtDate(ap.appt_date) : '';
+    return nm + (dt ? ' — ' + dt : '');
+  }).join('\n');
+  return confirm(
+    '⚠️ DİKKAT!\n\nHenüz başvurusu yapılmamış randevu(lar) var:\n\n' + names +
+    '\n\nYine de "Başvuru Yapıldı" olarak işaretlemek istiyor musunuz?'
+  );
 }
 
 async function addApplication(id){
