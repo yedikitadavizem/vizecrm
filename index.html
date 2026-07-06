@@ -4003,6 +4003,7 @@ async function saveAppt(id){
   }
 }
 async function moveStatus(id,ns){
+  if(!checkPendingApplications(id, ns, panelApps||[])) return;
   try{
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateCustomerStatus',customerId:id,newStatus:ns,token:CU.token})});
     const d=await res.json();
