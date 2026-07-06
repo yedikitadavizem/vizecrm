@@ -1793,7 +1793,7 @@ function renderRows(){
     const rem=c.fee-c.prepay;
     const stale=c.days>7;
     const hasRem=c.reminderDate===getTodayStr();
-    return `<tr onclick="openPanel('${c.id}')" style="${hasRem?'background:rgba(251,191,36,0.1);':''}">
+    return `<tr onclick="if(!event.target.closest('.app-badge'))openPanel('${c.id}')" style="${hasRem?'background:rgba(251,191,36,0.1);':''}">
       ${CU.role==='management'?'<td onclick="event.stopPropagation()"><input type="checkbox" class="bulk-cb" data-id="'+c.id+'" '+(bulkSelected.has(c.id)?'checked':'')+' onchange="toggleBulkSelect(this)" style="cursor:pointer;width:16px;height:16px"></td>':''}
       <td style="font-family:monospace;font-size:11px;color:var(--text3)">${c.id}</td>
       <td>${hasRem?'<span title="Bugün aranacak" style="font-size:12px;margin-right:2px">🔔</span>':''}<b>${c.name}</b>${stale?` <span style="font-size:9px;background:var(--red-bg);color:var(--red);border-radius:4px;padding:1px 5px">${c.days}g</span>`:''}</td>
@@ -1801,7 +1801,7 @@ function renderRows(){
       <td>${c.country}</td>
       <td><span class="badge ${SCLS[c.status]||'b-lead'}">${c.status}</span>${c.visaRenewal?'<span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:10px;background:#FEF3C7;color:#D97706;margin-left:4px">🔔 Vize Yenileme</span>':''}</td>
       <td>${c.callTotal===0?'<span style="color:var(--text3)">—</span>':`<span style="color:var(--accent);font-weight:700;font-size:12px">📞${c.callTotal}</span><span style="color:var(--green);font-size:10px;margin-left:4px">${c.callReached}✓</span>`}</td>
-      <td style="font-size:11px">${c.apptDate?'<span style="color:var(--accent)">📅 '+fmtDate(c.apptDate)+'</span>':'<span style="color:var(--text3)">—</span>'}${c.appPending>0?'<div onclick="event.stopPropagation();toggleExpandRow(\''+c.id+'\')" style="background:var(--amber-bg);color:var(--amber);font-size:9px;font-weight:700;padding:2px 8px;border-radius:8px;margin-top:2px;white-space:nowrap;cursor:pointer">⚠️ '+c.appPending+' bekliyor '+(expandedRows.has(c.id)?'▲':'▼')+'</div>':''}</td>
+      <td style="font-size:11px">${c.apptDate?'<span style="color:var(--accent)">📅 '+fmtDate(c.apptDate)+'</span>':'<span style="color:var(--text3)">—</span>'}${c.appPending>0?'<div class="app-badge" onclick="toggleExpandRow(\''+c.id+'\')" style="background:var(--amber-bg);color:var(--amber);font-size:9px;font-weight:700;padding:2px 8px;border-radius:8px;margin-top:2px;white-space:nowrap;cursor:pointer">⚠️ '+c.appPending+' bekliyor '+(expandedRows.has(c.id)?'▲':'▼')+'</div>':''}</td>
       <td style="font-size:11px;color:${(c.prepay>0&&rem<=0)?'var(--green)':(c.prepay<=0?'var(--text3)':'var(--amber)')};font-weight:600">${(c.prepay>0&&rem<=0)?'✓ Tam':(c.prepay<=0?'—':'₺'+rem.toLocaleString('tr-TR'))}</td>
       <td>${repCellHTML(c)}</td>
       <td style="font-size:10px;color:var(--text3)">🕐 ${c.lastMod}</td>
