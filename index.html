@@ -1550,7 +1550,13 @@ function renderDashBody(){
   // Dashboard ve modal AYNI kaynaktan okur — tutarsızlık olmaz
   const dashIncItems = getIncomeItems(dashPeriod, dashRep, dashCountry);
   const totalCollected = dashIncItems.reduce((s,p)=>s+p.amount, 0);
-  const pendingList=customers.filter(c=>(c.fee||0)-(c.prepay||0)>0&&c.status!=="İptal");
+  // Bekleyen tahsilat: dönem bağımsız ama temsilci/ülke filtresine uyar
+  const pendingList=customers.filter(c=>
+    (c.fee||0)-(c.prepay||0)>0&&
+    c.status!=='İptal'&&
+    (!dashRep||c.rep===dashRep)&&
+    (!dashCountry||c.country===dashCountry)
+  );
   const pendingTotal=pendingList.reduce((s,c)=>s+((c.fee||0)-(c.prepay||0)),0);
   const cancelledCount=all.filter(c=>c.status==='İptal').length;
   const staleList=all.filter(c=>c.days>7&&c.status!=='Tamamlandı'&&c.status!=='İptal');
