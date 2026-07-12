@@ -696,6 +696,83 @@ async function setReminder(custId, date){
   }catch(e){toast('Bağlantı hatası','red');}
 }
 
+
+let _dashWarnings = [];
+function setDashWarnings(w){ _dashWarnings = w; }
+
+function showStaleModal() {
+  var staleList = customers.filter(function(c){return c.days>7&&c.status!=='Tamamlandı'&&c.status!=='İptal';})
+    .sort(function(a,b){return b.days-a.days;});
+  _showDashModal('⚠️ Bekleyen Dosyalar (7+ gün)', staleList, [
+    {label:'Müşteri',key:'name',bold:true},
+    {label:'Aşama',key:'status',badge:true},
+    {label:'Temsilci',key:'rep'},
+    {label:'Bekleme',key:'days',suffix:' gün',red:true},
+  ]);
+}
+
+function showApprovedDetail() {
+  var list = customers.filter(function(c){return c.visaResult==='Onaylandı';});
+  _showDashModal('✅ Vize Onaylanan Müşteriler', list, [
+    {label:'Müşteri',key:'name',bold:true},
+    {label:'Ülke',key:'country'},
+    {label:'Temsilci',key:'rep'},
+    {label:'Vize Başlangıç',key:'visaStartDate',date:true},
+    {label:'Vize Bitiş',key:'visaEndDate',date:true},
+  ]);
+}
+
+function showWarningModal(level) {
+  var filtered = _dashWarnings.filter(function(w){return w.level===level;});
+  var list = filtered.map(function(w){return Object.assign({},w.c,{_msg:w.msg,_level:w.level});});
+  _showDashModal(level==='crit'?'🔴 Kritik Uyarılar':'⚠️ Uyarılar', list, [
+    {label:'Müşteri',key:'name',bold:true},
+    {label:'Uyarı',key:'_msg'},
+    {label:'Aşama',key:'status',badge:true},
+    {label:'Temsilci',key:'rep'},
+    {label:'Gün',key:'days',suffix:' gün'},
+  ]);
+}
+
+function _showDashModal(title, list, cols) {
+  var m = document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  m.addEventListener('click', function(e){if(e.target===m)m.remove();});
+  var thStyle='padding:9px 14px;text-align:left;font-size:11px;font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)';
+  var heads=cols.map(function(c){return '<th style="'+thStyle+'">'+c.label+'</th>';}).join('');
+  var rows=list.map(function(row){
+    var cells=cols.map(function(col){
+      var val=row[col.key]!=null&&row[col.key]!==''?row[col.key]:'—';
+      if(col.date&&val!=='—') val=fmtDate(val);
+      if(col.suffix&&val!=='—') val=val+col.suffix;
+      var style='padding:9px 14px;font-size:12px;';
+      if(col.bold) style+='font-weight:700;color:var(--text);';
+      else style+='color:var(--text2);';
+      if(col.red&&row[col.key]>14) style+='color:var(--red);font-weight:700;';
+      if(col.badge&&val!=='—') return '<td style="'+style+'"><span class="badge '+(SCLS[val]||'b-lead')+'" style="font-size:10px">'+val+'</span></td>';
+      return '<td style="'+style+'">'+esc(String(val))+'</td>';
+    }).join('');
+    return '<tr data-id="'+row.id+'" style="cursor:pointer;border-bottom:1px solid var(--border)">'+cells+'</tr>';
+  }).join('');
+  m.innerHTML='<div style="background:var(--bg);border-radius:16px;width:100%;max-width:900px;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3)">'
+    +'<div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between">'
+    +'<div><div style="font-size:15px;font-weight:700">'+title+'</div>'
+    +'<div style="font-size:12px;color:var(--text3);margin-top:2px">'+list.length+' müşteri · Satıra tıklayınca panel açılır</div></div>'
+    +'<button id="dm-close" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button></div>'
+    +'<div style="overflow-y:auto;flex:1"><table style="width:100%;border-collapse:collapse">'
+    +'<thead style="position:sticky;top:0;background:var(--surface2)"><tr>'+heads+'</tr></thead>'
+    +'<tbody>'+rows+'</tbody></table>'
+    +(list.length===0?'<div style="text-align:center;padding:40px;color:var(--text3)">Kayıt yok</div>':'')
+    +'</div></div>';
+  document.body.appendChild(m);
+  document.getElementById('dm-close').addEventListener('click',function(){m.remove();});
+  m.querySelectorAll('tr[data-id]').forEach(function(tr){
+    tr.addEventListener('mouseover',function(){tr.style.background='var(--surface2)';});
+    tr.addEventListener('mouseout',function(){tr.style.background='';});
+    tr.addEventListener('click',function(){m.remove();openPanel(tr.dataset.id);});
+  });
+}
+
 async function loadAllPayments(){
   if(CU.role!=='management') return;
   try{
@@ -1503,8 +1580,8 @@ function buildWarningsHTML(){
     <div style="padding:12px 18px;border-bottom:1px solid var(--border);background:var(--surface2);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
       <div style="font-size:13px;font-weight:600">🔔 Operasyonel Uyarılar</div>
       <div style="display:flex;gap:8px">
-        ${crits.length?`<span class="badge b-cancelled" style="font-size:11px">🔴 ${crits.length} Kritik</span>`:''}
-        ${warns.length?`<span class="badge b-docs-pending" style="font-size:11px">⚠️ ${warns.length} Uyarı</span>`:''}
+        ${crits.length?`<span class="badge b-cancelled" style="font-size:11px;cursor:pointer" onclick="showWarningModal('crit')">🔴 ${crits.length} Kritik</span>`:''}
+        ${warns.length?`<span class="badge b-docs-pending" style="font-size:11px;cursor:pointer" onclick="showWarningModal('warn')">⚠️ ${warns.length} Uyarı</span>`:''}
       </div>
     </div>
     ${warnings.map(w=>`
@@ -1572,6 +1649,7 @@ function renderDashBody(){
   const cancelledCount=all.filter(c=>c.status==='İptal').length;
   const staleList=all.filter(c=>c.days>7&&c.status!=='Tamamlandı'&&c.status!=='İptal');
   const consulateList=all.filter(c=>CONSULATE_WAIT_S.includes(c.status)).sort((a,b)=>b.days-a.days);
+  const approvedList=customers.filter(c=>c.visaResult==='Onaylandı');
   const cycle=avgSalesCycleDays(all);
 
   const byCountry=topGroups(all,c=>c.country);
@@ -1586,8 +1664,9 @@ function renderDashBody(){
     <div class="stat-card c-amber" style="cursor:pointer" onclick="showPendingDetail()"><div class="stat-icon" style="background:var(--amber-bg);color:var(--amber)">⏳</div><div class="stat-val" style="color:var(--amber)">${fmtTL(pendingTotal)}</div><div class="stat-label">Bekleyen Tahsilat</div><div class="stat-trend" style="color:var(--text2)">${pendingList.length} müşteri · Detay →</div></div>
     <div class="stat-card c-purple" style="cursor:pointer" onclick="showConsulateDetail()"><div class="stat-icon" style="background:#F3E8FF;color:#7C3AED">🛂</div><div class="stat-val" style="color:#7C3AED">${consulateList.length}</div><div class="stat-label">Sonuç Bekleyenler</div><div class="stat-trend" style="color:#7C3AED;font-size:10px">Detay için tıkla →</div></div>
     <div class="stat-card c-red"><div class="stat-icon" style="background:var(--red-bg);color:var(--red)">✕</div><div class="stat-val" style="color:var(--red)">${cancelledCount}</div><div class="stat-label">İptal Edilen</div></div>
+    <div class="stat-card" style="border-top:3px solid var(--green);cursor:pointer" onclick="showApprovedDetail()"><div class="stat-icon" style="background:var(--green-bg);color:var(--green)">✅</div><div class="stat-val" style="color:var(--green)">${approvedList.length}</div><div class="stat-label">Vize Onaylanan</div><div class="stat-trend" style="color:var(--green);font-size:10px">Detay için tıkla →</div></div>
   </div>
-  ${staleList.length?`<div class="alert alert-red"><div style="display:flex;align-items:center;gap:10px"><span>⚠️</span><div><div style="font-size:13px;font-weight:600;color:var(--red)">${staleList.length} dosya 7+ gün aynı aşamada bekliyor</div><div style="font-size:11px;color:var(--text2);margin-top:1px">Bekleyen dosyalar iade riskini artırır</div></div></div><button class="btn btn-danger btn-sm" onclick="showPage('customers')">Görüntüle →</button></div>`:''}
+  ${staleList.length?`<div class="alert alert-red"><div style="display:flex;align-items:center;gap:10px"><span>⚠️</span><div><div style="font-size:13px;font-weight:600;color:var(--red)">${staleList.length} dosya 7+ gün aynı aşamada bekliyor</div><div style="font-size:11px;color:var(--text2);margin-top:1px">Bekleyen dosyalar iade riskini artırır</div></div></div><button class="btn btn-danger btn-sm" onclick="showStaleModal()">Görüntüle →</button></div>`:''}
   ${buildWarningsHTML()}
   ${buildStageDurationHTML()}
   ${buildPerformanceHTML()}
