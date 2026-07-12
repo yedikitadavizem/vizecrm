@@ -86,6 +86,9 @@
 const EDGE_URL = 'https://huhijoftpgizixwtjwpk.supabase.co/functions/v1/bright-handler';
 
 // Status → step mapping
+// ⚠️ SENKRONİZASYON UYARISI: Bu liste bright-handler-v14.ts (SALES_STAGES/EVRAK_STAGES/RANDEVU_STAGES)
+// ve index__31_.html (CRM — KSTAGES, SCLS vb.) ile elle senkron tutuluyor. Yeni bir durum
+// eklerken/çıkarırken/adını değiştirirken HER ÜÇ dosyayı da güncelleyin.
 const STEPS = [
   {key:'kayit',            label:'Kayıt',                        statuses:['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İletişime Geçildi']},
   {key:'odeme',            label:'Ödeme Alındı',                 statuses:['Ödeme Alındı']},
@@ -143,14 +146,33 @@ function stepIcon(state) {
 function render(data) {
   const status = data.status;
   const rawStepIdx = STEPS.findIndex(s => s.statuses.includes(status));
-  // Durum listedeki adımların ötesindeyse (Sonuç Bekleniyor / Tamamlandı / İptal) tüm adımlar tamamlanmış sayılır
-  const isBeyondSteps = rawStepIdx === -1;
-  const stepIdx = isBeyondSteps ? STEPS.length : rawStepIdx;
   const isCancelled = status === 'İptal';
   const isCompleted = status === 'Tamamlandı';
+  // "Sonuç Bekleniyor" ve "Tamamlandı" listedeki tüm adımlardan SONRA gelir (her ikisi de tüm
+  // adımların gerçekten tamamlanmasıyla oluşur) — bu ikisinde tüm adımlar güvenle "tamamlandı" sayılabilir.
+  // Ama "İptal" (veya beklenmedik başka bir durum) süreç ORTASINDA da oluşabilir — bu yüzden geçmişten
+  // gerçekte hangi adıma kadar ilerlendiğini buluyoruz, yoksa her şey yanlışlıkla tamamlanmış görünür.
+  let stepIdx;
+  if (rawStepIdx !== -1) {
+    stepIdx = rawStepIdx;
+  } else if (status === 'Sonuç Bekleniyor' || isCompleted) {
+    stepIdx = STEPS.length; // tüm adımlar tamamlandı
+  } else {
+    // Geçmişte listedeki adımlardan en son ulaşılanı bul (en yeniden en eskiye doğru tara)
+    const history = Array.isArray(data.statusHistory) ? data.statusHistory : [];
+    let reachedIdx = -1;
+    for (let i = history.length - 1; i >= 0; i--) {
+      const idx = STEPS.findIndex(s => s.statuses.includes(history[i]));
+      if (idx !== -1) { reachedIdx = idx; break; }
+    }
+    // Bulunan adım "tamamlandı" sayılır (sürecin durduğu nokta), sonrasındaki adımlar "bekliyor" kalır
+    stepIdx = reachedIdx === -1 ? 0 : reachedIdx + 1;
+  }
 
   const stepsHTML = STEPS.map((step, i) => {
     let state = i < stepIdx ? 'done' : i === stepIdx ? 'active' : 'pending';
+    // İptal durumunda sürecin durduğu son adım kırmızı ✕ ile işaretlenir (yeşil "tamamlandı" yanıltıcı olurdu)
+    if (state === 'active' && isCancelled) state = 'cancelled';
     let sub = '';
     // Randevu tarihi belliyse, randevu alındıktan sonraki her adımda hatırlatma olarak göster
     if (step.key === 'randevu_alindi' && (state === 'done' || state === 'active') && data.apptDate) {
