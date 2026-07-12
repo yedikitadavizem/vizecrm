@@ -42,6 +42,17 @@
     .contact-box{background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:16px;margin-top:4px}
     .contact-box p{font-size:13px;color:#374151;margin-bottom:2px}
     .contact-box a{color:#3B82F6;text-decoration:none;font-size:13px}
+    .rep-card{display:flex;align-items:center;gap:12px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:12px;padding:14px 16px;margin-bottom:10px}
+    .rep-card:last-child{margin-bottom:0}
+    .rep-avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;font-weight:700;color:#fff;background:#3B82F6}
+    .rep-info{flex:1;min-width:0}
+    .rep-role{font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:2px}
+    .rep-name{font-size:14px;font-weight:700;color:#111827}
+    .rep-phone{font-size:13px;color:#3B82F6;text-decoration:none;display:inline-block;margin-top:1px}
+    .rep-card.ops{background:linear-gradient(135deg,#FFF7ED,#FFEDD5);border:1px solid #FDBA74}
+    .rep-card.ops .rep-avatar{background:#EA580C}
+    .rep-card.ops .rep-role{color:#C2410C}
+    .rep-card.ops .rep-phone{color:#C2410C;font-weight:600}
     .update-time{font-size:11px;color:#9CA3AF;text-align:center;margin-top:16px}
     .btn-refresh{display:block;width:100%;padding:12px;background:#3B82F6;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-top:16px;transition:background 0.2s}
     .btn-refresh:hover{background:#2563EB}
@@ -99,6 +110,28 @@ function fmtDT(d) {
   return fmtDate(d) + ' ' + dt.getHours().toString().padStart(2,'0') + ':' + dt.getMinutes().toString().padStart(2,'0');
 }
 
+function esc(s) {
+  if (s === null || s === undefined) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function initials(name) {
+  if (!name) return '?';
+  return name.trim().split(/\s+/).slice(0,2).map(w => w[0]).join('').toUpperCase();
+}
+
+function repCard(role, name, phone, isOps) {
+  if (!name) return '';
+  return `<div class="rep-card${isOps ? ' ops' : ''}">
+    <div class="rep-avatar">${esc(initials(name))}</div>
+    <div class="rep-info">
+      <div class="rep-role">${esc(role)}</div>
+      <div class="rep-name">${esc(name)}</div>
+      ${phone ? `<a class="rep-phone" href="tel:${esc(phone)}">📞 ${esc(phone)}</a>` : ''}
+    </div>
+  </div>`;
+}
+
 function stepIcon(state) {
   if (state === 'done')   return '✓';
   if (state === 'active') return '●';
@@ -115,8 +148,8 @@ function render(data) {
     // Randevu bilgisi aktif randevu adımındaysa göster
     if (state === 'active' && step.key === 'randevu' && data.apptDate) {
       sub = `<div class="appt-box">
-        <p>📅 ${fmtDate(data.apptDate)}${data.apptTime ? ' · ⏰ ' + data.apptTime : ''}</p>
-        ${data.apptCenter ? '<span>📍 ' + data.apptCenter + '</span>' : ''}
+        <p>📅 ${esc(fmtDate(data.apptDate))}${data.apptTime ? ' · ⏰ ' + esc(data.apptTime) : ''}</p>
+        ${data.apptCenter ? '<span>📍 ' + esc(data.apptCenter) + '</span>' : ''}
       </div>`;
     }
     if (state === 'active') {
@@ -131,17 +164,26 @@ function render(data) {
     </div>`;
   }).join('');
 
-  const contactHTML = `<div class="contact-box">
-    <p>📞 Sorularınız için:</p>
-    <a href="mailto:${data.contact}">${data.contact}</a>
-    ${data.salesRep ? '<br><span style="font-size:12px;color:#6B7280;margin-top:4px;display:block">Sorumlu: ' + data.salesRep + '</span>' : ''}
-  </div>`;
+  // Aynı kişi hem satış hem o anki aşamanın sorumlusuysa tekrar gösterme
+  const sameRep = data.salesRep && data.currentRep && data.salesRep === data.currentRep;
+
+  const repsHTML = [
+    repCard('Satış Temsilciniz', data.salesRep, data.salesRepPhone, false),
+    !sameRep ? repCard(data.currentRepRole || 'Şu An İşleminizi Yürüten', data.currentRep, data.currentRepPhone, false) : '',
+    data.opsManager ? repCard(data.opsManager.role || 'Operasyon Yöneticisi', data.opsManager.name, data.opsManager.phone, true) : ''
+  ].join('');
+
+  const contactHTML = `<div class="contact-box" style="margin-bottom:10px">
+    <p>📧 Genel sorularınız için:</p>
+    <a href="mailto:${esc(data.contact)}">${esc(data.contact)}</a>
+  </div>
+  ${repsHTML}`;
 
   document.getElementById('content').innerHTML = `
     <div class="section">
-      <div class="file-no">${data.fileNumber}</div>
-      <div class="customer-name">${data.name}</div>
-      <div class="visa-info">🌍 ${data.country || '—'}${data.visaType ? ' · ' + data.visaType : ''}</div>
+      <div class="file-no">${esc(data.fileNumber)}</div>
+      <div class="customer-name">${esc(data.name)}</div>
+      <div class="visa-info">🌍 ${esc(data.country) || '—'}${data.visaType ? ' · ' + esc(data.visaType) : ''}</div>
     </div>
     <div class="section">
       <div class="status-label">Başvuru Durumu</div>
