@@ -538,7 +538,7 @@ if (localStorage.getItem('vizecrm_token')) {
     <div class="fg"><label class="fl2">E-posta</label><input class="fi2" placeholder="ornek@email.com" id="nm-email"></div>
     <div class="form-row">
       <div class="fg"><label class="fl2">Hedef Ülke *</label>
-        <select class="fi2" id="nm-country"><option value="">— Ülke Seçin —</option><option>🇩🇪 Almanya</option><option>🇬🇧 İngiltere</option><option>🇫🇷 Fransa</option><option>🇮🇹 İtalya</option><option>🇪🇸 İspanya</option><option>🇳🇱 Hollanda</option><option>🇧🇪 Belçika</option><option>🇦🇹 Avusturya</option><option>🇨🇭 İsviçre</option><option>🇵🇹 Portekiz</option><option>🇬🇷 Yunanistan</option><option>🇸🇪 İsveç</option><option>🇳🇴 Norveç</option><option>🇩🇰 Danimarka</option><option>🇵🇱 Polonya</option><option>🇨🇿 Çekya</option><option>🇭🇺 Macaristan</option><option>🇮🇪 İrlanda</option><option>🇫🇮 Finlandiya</option><option>🇷🇴 Romanya</option><option>🇧🇬 Bulgaristan</option><option>🇨🇳 Çin</option><option>🇺🇸 Amerika</option></select></div>
+        <select class="fi2" id="nm-country"><option value="">— Ülke Seçin —</option><option>🇩🇪 Almanya</option><option>🇬🇧 İngiltere</option><option>🇫🇷 Fransa</option><option>🇮🇹 İtalya</option><option>🇪🇸 İspanya</option><option>🇳🇱 Hollanda</option><option>🇧🇪 Belçika</option><option>🇦🇹 Avusturya</option><option>🇨🇭 İsviçre</option><option>🇵🇹 Portekiz</option><option>🇬🇷 Yunanistan</option><option>🇸🇪 İsveç</option><option>🇳🇴 Norveç</option><option>🇩🇰 Danimarka</option><option>🇵🇱 Polonya</option><option>🇨🇿 Çekya</option><option>🇭🇺 Macaristan</option><option>🇮🇪 İrlanda</option><option>🇫🇮 Finlandiya</option><option>🇷🇴 Romanya</option><option>🇧🇬 Bulgaristan</option><option>🇸🇰 Slovakya</option><option>🇨🇳 Çin</option><option>🇺🇸 Amerika</option></select></div>
       <div class="fg"><label class="fl2">Vize Türü</label>
         <select class="fi2" id="nm-visa"><option>Schengen Turistik</option><option>Çalışma Vizesi</option><option>Öğrenci Vizesi</option><option>Aile Birleşimi</option></select></div>
     </div>
@@ -637,7 +637,7 @@ async function loadCustomers(){
       paymentDate:r.payment_date||'',
       refundStatus:r.refund_status||'',refundAmount:r.refund_amount||0,refundReason:r.refund_reason||'',refundDate:r.refund_date||'',
       refundRequestedBy:r.refund_requested_by||'',refundRequestedAt:r.refund_requested_at||null,
-      callTotal:r.call_total||0,callReached:r.call_reached||0,reminderDate:r.call_reminder_date||'',appTotal:r.app_total||0,appPending:r.app_pending||0,appPendingNoDate:r.app_pending_no_date||0,appPendingData:JSON.parse(r.app_pending_data||'[]')
+      callTotal:r.call_total||0,callReached:r.call_reached||0,reminderDate:r.call_reminder_date||'',appTotal:r.app_total||0,appPending:r.app_pending||0,appPendingNoDate:r.app_pending_no_date||0,appPendingData:JSON.parse(r.app_pending_data||'[]'),visaResult:r.visa_result||'',visaStartDate:r.visa_start_date||'',visaEndDate:r.visa_end_date||''
     }));
     filtered=[...customers];
   }catch(e){
@@ -1470,6 +1470,16 @@ function buildWarningsHTML(){
     if(a.level!==b.level) return a.level==='crit'?-1:1;
     return b.c.days-a.c.days;
   });
+  // Vize bitiş uyarısı (sadece yönetici)
+  if (CU.role==='management') {
+    const today=new Date(); today.setHours(0,0,0,0);
+    customers.filter(c=>c.visaEndDate&&c.visaResult==='Onaylandı').forEach(c=>{
+      const exp=new Date(c.visaEndDate); exp.setHours(0,0,0,0);
+      const days=Math.ceil((exp-today)/(1000*60*60*24));
+      if(days<=30&&days>=0) warnings.push({type:'visa',msg:`${c.name} — Vize ${days===0?'bugün':''+days+' gün içinde'} bitiyor (${fmtDate(c.visaEndDate)})`,custId:c.id});
+      else if(days<0) warnings.push({type:'visa',msg:`${c.name} — Vizesi ${Math.abs(days)} gün önce bitti (${fmtDate(c.visaEndDate)})`,custId:c.id});
+    });
+  }
   if(!warnings.length) return `
   <div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px 20px;margin-bottom:20px;display:flex;align-items:center;gap:10px">
     <span style="font-size:18px">✅</span>
@@ -1737,7 +1747,7 @@ function renderCusts(){
       <optgroup label="✅ Sonuç"><option>Tamamlandı</option><option>İptal</option></optgroup>
     </select>
     <select class="sel" onchange="fCo(this.value)">
-      <option value="">Tüm ülkeler</option><option>🇩🇪 Almanya</option><option>🇬🇧 İngiltere</option><option>🇫🇷 Fransa</option><option>🇮🇹 İtalya</option><option>🇪🇸 İspanya</option><option>🇳🇱 Hollanda</option><option>🇧🇪 Belçika</option><option>🇦🇹 Avusturya</option><option>🇨🇭 İsviçre</option><option>🇵🇹 Portekiz</option><option>🇬🇷 Yunanistan</option><option>🇸🇪 İsveç</option><option>🇳🇴 Norveç</option><option>🇩🇰 Danimarka</option><option>🇵🇱 Polonya</option><option>🇨🇿 Çekya</option><option>🇭🇺 Macaristan</option><option>🇮🇪 İrlanda</option><option>🇫🇮 Finlandiya</option><option>🇷🇴 Romanya</option><option>🇧🇬 Bulgaristan</option><option>🇨🇳 Çin</option><option>🇺🇸 Amerika</option>
+      <option value="">Tüm ülkeler</option><option>🇩🇪 Almanya</option><option>🇬🇧 İngiltere</option><option>🇫🇷 Fransa</option><option>🇮🇹 İtalya</option><option>🇪🇸 İspanya</option><option>🇳🇱 Hollanda</option><option>🇧🇪 Belçika</option><option>🇦🇹 Avusturya</option><option>🇨🇭 İsviçre</option><option>🇵🇹 Portekiz</option><option>🇬🇷 Yunanistan</option><option>🇸🇪 İsveç</option><option>🇳🇴 Norveç</option><option>🇩🇰 Danimarka</option><option>🇵🇱 Polonya</option><option>🇨🇿 Çekya</option><option>🇭🇺 Macaristan</option><option>🇮🇪 İrlanda</option><option>🇫🇮 Finlandiya</option><option>🇷🇴 Romanya</option><option>🇧🇬 Bulgaristan</option><option>🇸🇰 Slovakya</option><option>🇨🇳 Çin</option><option>🇺🇸 Amerika</option>
     </select>
     ${hasColFilter?`<button class="btn btn-ghost btn-sm" onclick="resetTableFilters()">✕ Kolon filtrelerini temizle</button>`:''}
   </div>
@@ -1973,6 +1983,21 @@ function exportConsulateExcel(){
   toast('✓ Excel indirildi ('+list.length+' müşteri)','green');
 }
 
+async function saveVisaResult(id) {
+  const result = document.getElementById('vr-'+id)?.value||'';
+  const start = document.getElementById('vs-'+id)?.value||'';
+  const end = document.getElementById('ve-'+id)?.value||'';
+  if (result==='Onaylandı' && (!start||!end)) { toast('Onaylandıysa başlangıç ve bitiş tarihi giriniz','red'); return; }
+  try {
+    const res = await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateVisa',customerId:id,visaResult:result||null,visaStartDate:start||null,visaEndDate:end||null,token:CU.token})});
+    const d = await res.json();
+    if (!d.success) { toast('Hata: '+(d.error?.message||'Kaydedilemedi'),'red'); return; }
+    toast('✅ Vize sonucu kaydedildi','green');
+    await loadCustomers();
+    renderConsulate();
+  } catch(e) { toast('Bağlantı hatası','red'); }
+}
+
 function renderConsulate(){
   const list=customers.filter(c=>CONSULATE_WAIT_S.includes(c.status)).sort((a,b)=>b.days-a.days);
   function rowColor(d){
@@ -1990,11 +2015,16 @@ function renderConsulate(){
     <div style="overflow-x:auto">
     <table class="tbl" style="min-width:920px">
       <thead><tr>
-        <th>Dosya No</th><th>Ad Soyad</th><th>Telefon</th><th>Ülke</th><th>Aşama</th><th>Süreç Boyunca Sorumlular</th><th>Bekleme Süresi</th>
+        <th>Dosya No</th><th>Ad Soyad</th><th>Telefon</th><th>Ülke</th><th>Aşama</th><th>Süreç Boyunca Sorumlular</th><th>Bekleme Süresi</th>${CU.role==='management'?'<th>Vize Sonucu</th>':''}
       </tr></thead>
       <tbody>
         ${list.map(c=>{
           const rc=rowColor(c.days);
+          const visaBadge = c.visaResult==='Onaylandı'
+            ? `<span style="background:var(--green-bg);color:var(--green);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px">✅ Onaylandı</span>${c.visaStartDate&&c.visaEndDate?`<div style="font-size:10px;color:var(--text2);margin-top:2px">${fmtDate(c.visaStartDate)} → ${fmtDate(c.visaEndDate)}</div>`:''}`
+            : c.visaResult==='Reddedildi'
+              ? '<span style="background:var(--red-bg);color:var(--red);font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px">❌ Reddedildi</span>'
+              : '<span style="color:var(--text3);font-size:11px">Girilmedi</span>';
           return `<tr onclick="openPanel('${c.id}')" style="cursor:pointer;background:${rc.bg}">
             <td>${c.id}</td>
             <td><b>${c.name}</b></td>
@@ -2007,7 +2037,19 @@ function renderConsulate(){
               <div><span style="color:#7C3AED;font-weight:600">📅 Randevu:</span> ${c.randevuRep||'—'}</div>
             </td>
             <td style="font-weight:700;color:${rc.fg}">${rc.label}</td>
-          </tr>`;
+            ${CU.role==='management'?`<td onclick="event.stopPropagation()">${visaBadge}<div style="margin-top:6px;display:flex;flex-direction:column;gap:4px">
+              <select id="vr-${c.id}" class="sel" style="font-size:11px;padding:3px 6px" onchange="this.nextElementSibling.style.display=this.value==='Onaylandı'?'flex':'none'">
+                <option value="">Sonuç gir...</option>
+                <option value="Onaylandı" ${c.visaResult==='Onaylandı'?'selected':''}>✅ Onaylandı</option>
+                <option value="Reddedildi" ${c.visaResult==='Reddedildi'?'selected':''}>❌ Reddedildi</option>
+              </select>
+              <div style="display:${c.visaResult==='Onaylandı'?'flex':'none'};gap:4px;align-items:center;flex-wrap:wrap">
+                <input type="date" id="vs-${c.id}" class="fi2" value="${c.visaStartDate||''}" style="padding:3px 6px;font-size:11px;width:120px" placeholder="Başlangıç">
+                <span style="color:var(--text3)">→</span>
+                <input type="date" id="ve-${c.id}" class="fi2" value="${c.visaEndDate||''}" style="padding:3px 6px;font-size:11px;width:120px" placeholder="Bitiş">
+              </div>
+              <button class="btn btn-primary btn-sm" style="font-size:10px;padding:3px 8px;margin-top:2px" onclick="saveVisaResult('${c.id}')">✓ Kaydet</button>
+            </div></td>`:''}</tr>`;
         }).join('')}
       </tbody>
     </table>
@@ -3126,7 +3168,7 @@ async function openPanel(id, readonly=false){
         <div class="fi"><div class="fl">E-posta</div><input class="fi2" id="ed-email-${c.id}" value="${c.email||''}" style="padding:6px;width:100%" ${panelReadOnly?'disabled':''}></div>
         <div class="fi"><div class="fl">TC</div><input class="fi2" id="ed-tc-${c.id}" value="${c.tc||''}" placeholder="TC Kimlik No" style="padding:6px;width:100%" maxlength="11" ${panelReadOnly?'disabled':''}></div>
         <div class="fi"><div class="fl">Ülke</div><select class="fi2" id="ed-country-${c.id}" style="padding:6px;width:100%" ${panelReadOnly?'disabled':''}><option value="">— Ülke Seçin —</option>
-          ${['🇩🇪 Almanya','🇬🇧 İngiltere','🇫🇷 Fransa','🇮🇹 İtalya','🇪🇸 İspanya','🇳🇱 Hollanda','🇧🇪 Belçika','🇦🇹 Avusturya','🇨🇭 İsviçre','🇵🇹 Portekiz','🇬🇷 Yunanistan','🇸🇪 İsveç','🇳🇴 Norveç','🇩🇰 Danimarka','🇵🇱 Polonya','🇨🇿 Çekya','🇭🇺 Macaristan','🇮🇪 İrlanda','🇫🇮 Finlandiya','🇷🇴 Romanya','🇧🇬 Bulgaristan','🇨🇳 Çin','🇺🇸 Amerika'].map(o=>`<option ${c.country===o?'selected':''}>${o}</option>`).join('')}
+          ${['🇩🇪 Almanya','🇬🇧 İngiltere','🇫🇷 Fransa','🇮🇹 İtalya','🇪🇸 İspanya','🇳🇱 Hollanda','🇧🇪 Belçika','🇦🇹 Avusturya','🇨🇭 İsviçre','🇵🇹 Portekiz','🇬🇷 Yunanistan','🇸🇪 İsveç','🇳🇴 Norveç','🇩🇰 Danimarka','🇵🇱 Polonya','🇨🇿 Çekya','🇭🇺 Macaristan','🇮🇪 İrlanda','🇫🇮 Finlandiya','🇷🇴 Romanya','🇧🇬 Bulgaristan','🇸🇰 Slovakya','🇨🇳 Çin','🇺🇸 Amerika'].map(o=>`<option ${c.country===o?'selected':''}>${o}</option>`).join('')}
         </select></div>
         <div class="fi"><div class="fl">Vize Türü</div><select class="fi2" id="ed-visa-${c.id}" style="padding:6px;width:100%" ${panelReadOnly?'disabled':''}>
           <option ${c.visa==='Schengen Turistik'?'selected':''}>Schengen Turistik</option>
@@ -3213,7 +3255,7 @@ async function openPanel(id, readonly=false){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
           <select class="fi2" id="new-ap-country-${c.id}" style="padding:5px;font-size:11px;grid-column:span 2">
             <option value="">Ülke seç *</option>
-            ${['🇩🇪 Almanya','🇬🇧 İngiltere','🇫🇷 Fransa','🇮🇹 İtalya','🇪🇸 İspanya','🇳🇱 Hollanda','🇧🇪 Belçika','🇦🇹 Avusturya','🇨🇭 İsviçre','🇵🇹 Portekiz','🇬🇷 Yunanistan','🇸🇪 İsveç','🇳🇴 Norveç','🇩🇰 Danimarka','🇵🇱 Polonya','🇨🇿 Çekya','🇭🇺 Macaristan','🇮🇪 İrlanda','🇫🇮 Finlandiya','🇷🇴 Romanya','🇧🇬 Bulgaristan','🇨🇳 Çin','🇺🇸 Amerika'].map(o=>`<option>${o}</option>`).join('')}
+            ${['🇩🇪 Almanya','🇬🇧 İngiltere','🇫🇷 Fransa','🇮🇹 İtalya','🇪🇸 İspanya','🇳🇱 Hollanda','🇧🇪 Belçika','🇦🇹 Avusturya','🇨🇭 İsviçre','🇵🇹 Portekiz','🇬🇷 Yunanistan','🇸🇪 İsveç','🇳🇴 Norveç','🇩🇰 Danimarka','🇵🇱 Polonya','🇨🇿 Çekya','🇭🇺 Macaristan','🇮🇪 İrlanda','🇫🇮 Finlandiya','🇷🇴 Romanya','🇧🇬 Bulgaristan','🇸🇰 Slovakya','🇨🇳 Çin','🇺🇸 Amerika'].map(o=>`<option>${o}</option>`).join('')}
           </select>
           <input class="fi2" type="text" id="new-ap-name-${c.id}" placeholder="Başvuran adı (boş=ana müşteri)" style="padding:5px;font-size:11px;grid-column:span 2">
           <input class="fi2" type="date" id="new-ap-date-${c.id}" style="padding:5px;font-size:11px">
