@@ -897,7 +897,7 @@ function resetAllFilters(){
   tableSort={col:'',dir:'asc'};
   tableRepFilter='';
   tableColSearch='';
-  filtered=customers.filter(c=>!CONSULATE_WAIT_S.includes(c.status));
+  filtered=customers.filter(c=>!CONSULATE_WAIT_S.includes(c.status)&&c.status!=='İlgilenmiyor');
   const todayRem=customers.filter(c=>c.reminderDate===getTodayStr()&&(
     CU.role==='management'||
     (CU.role==='sales'&&c.rep===CU.name)||
