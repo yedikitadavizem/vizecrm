@@ -32,6 +32,8 @@
     .step.done .step-icon{background:#DCFCE7;color:#22C55E}
     .step.active .step-icon{background:#EFF6FF;color:#3B82F6;box-shadow:0 0 0 3px #BFDBFE}
     .step.pending .step-icon{background:#F3F4F6;color:#D1D5DB}
+    .step.cancelled .step-icon{background:#FEE2E2;color:#DC2626}
+    .step.cancelled .step-name{color:#DC2626}
     .step-text{padding-top:5px}
     .step-name{font-size:14px;font-weight:600;color:#374151}
     .step.pending .step-name{color:#9CA3AF}
@@ -82,20 +84,18 @@ const EDGE_URL = 'https://huhijoftpgizixwtjwpk.supabase.co/functions/v1/bright-h
 
 // Status → step mapping
 const STEPS = [
-  {key:'kayit',    label:'Kayıt ve Ödeme',           statuses:['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İletişime Geçildi','Ödeme Alındı']},
-  {key:'evrak',    label:'Evrak Hazırlığı',           statuses:['Belge Bekleniyor','Belgeler Tamam']},
-  {key:'randevu',  label:'Randevu',                   statuses:['Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı']},
-  {key:'basvuru',  label:'Konsolosluk Başvurusu',     statuses:['Başvuru Yapıldı','Sonuç Bekleniyor']},
-  {key:'sonuc',    label:'Sonuç',                     statuses:['Tamamlandı','İptal']},
+  {key:'kayit',            label:'Kayıt',                        statuses:['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İletişime Geçildi']},
+  {key:'odeme',            label:'Ödeme Alındı',                 statuses:['Ödeme Alındı']},
+  {key:'belge_bekleniyor', label:'Belge Bekleniyor',              statuses:['Belge Bekleniyor']},
+  {key:'belgeler_tamam',   label:'Belgeler Tamam',                statuses:['Belgeler Tamam']},
+  {key:'randevu_araniyor', label:'Randevu Aranıyor',              statuses:['Randevu Aranıyor']},
+  {key:'randevu_alindi',   label:'Randevu Alındı',                statuses:['Randevu Alındı']},
+  {key:'randevu_evrak_h',  label:'Randevu Evrakları Hazırlanıyor',statuses:['Randevu Evrakları Hazırlanıyor']},
+  {key:'randevu_evrak_t',  label:'Randevu Evrakları Tamamlandı',  statuses:['Randevu Evrakları Tamamlandı']},
+  {key:'basvuru_yapildi',  label:'Başvuru Yapıldı',                statuses:['Başvuru Yapıldı']},
+  {key:'sonuc_bekleniyor', label:'Sonuç Bekleniyor',              statuses:['Sonuç Bekleniyor']},
+  {key:'sonuc',            label:'Sonuç',                         statuses:['Tamamlandı','İptal']},
 ];
-
-function getStepState(stepStatuses, currentStatus) {
-  const stepIdx = STEPS.findIndex(s => s.statuses.includes(currentStatus));
-  const thisIdx = STEPS.findIndex(s => s.statuses === stepStatuses || s.statuses.every((v,i)=>v===stepStatuses[i]));
-  if (thisIdx < stepIdx) return 'done';
-  if (thisIdx === stepIdx) return 'active';
-  return 'pending';
-}
 
 function fmtDate(d) {
   if (!d) return '';
@@ -133,6 +133,7 @@ function repCard(role, name, phone, isOps) {
 }
 
 function stepIcon(state) {
+  if (state === 'cancelled') return '✕';
   if (state === 'done')   return '✓';
   if (state === 'active') return '●';
   return '○';
@@ -141,24 +142,28 @@ function stepIcon(state) {
 function render(data) {
   const status = data.status;
   const stepIdx = STEPS.findIndex(s => s.statuses.includes(status));
+  const isCancelled = status === 'İptal';
 
   const stepsHTML = STEPS.map((step, i) => {
-    const state = i < stepIdx ? 'done' : i === stepIdx ? 'active' : 'pending';
+    let state = i < stepIdx ? 'done' : i === stepIdx ? 'active' : 'pending';
+    if (step.key === 'sonuc' && i === stepIdx && isCancelled) state = 'cancelled';
     let sub = '';
-    // Randevu bilgisi aktif randevu adımındaysa göster
-    if (state === 'active' && step.key === 'randevu' && data.apptDate) {
+    // Randevu tarihi belliyse, randevu alındıktan sonraki her adımda hatırlatma olarak göster
+    if (step.key === 'randevu_alindi' && (state === 'done' || state === 'active') && data.apptDate) {
       sub = `<div class="appt-box">
         <p>📅 ${esc(fmtDate(data.apptDate))}${data.apptTime ? ' · ⏰ ' + esc(data.apptTime) : ''}</p>
         ${data.apptCenter ? '<span>📍 ' + esc(data.apptCenter) + '</span>' : ''}
       </div>`;
     }
-    if (state === 'active') {
+    if (state === 'cancelled') {
+      sub = '<span style="font-size:12px;color:#DC2626;font-weight:600">Başvuru iptal edildi</span>' + sub;
+    } else if (state === 'active') {
       sub = '<span style="font-size:12px;color:#3B82F6;font-weight:500">← Şu an burada</span>' + sub;
     }
     return `<div class="step ${state}">
       <div class="step-icon">${stepIcon(state)}</div>
       <div class="step-text">
-        <div class="step-name">${step.label}</div>
+        <div class="step-name">${esc(step.label)}</div>
         ${sub}
       </div>
     </div>`;
