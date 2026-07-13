@@ -2221,14 +2221,16 @@ async function saveVisaResult(id) {
     const d = await res.json();
     if (!d.success) { toast('Hata: '+(d.error?.message||'Kaydedilemedi'),'red'); return; }
     toast('✅ Vize sonucu kaydedildi','green');
-    // Onaylandı → Tamamlandı, Reddedildi → İptal
-    if(result==='Onaylandı') {
+    // Onaylandı → Tamamlandı, Reddedildi → Tamamlandı (reddedilme bir iptal değildir, sürecin
+    // olumsuz sonuçla BİTMİŞ hâlidir — dosya yine "Tamamlandı" sekmesinde, "İptal" listesine karışmaz)
+    if(result==='Onaylandı' || result==='Reddedildi') {
       await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateCustomerStatus',customerId:id,newStatus:'Tamamlandı',token:CU.token})});
-    } else if(result==='Reddedildi') {
-      await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updateCustomerStatus',customerId:id,newStatus:'İptal',token:CU.token})});
     }
     await loadCustomers();
-    renderConsulate();
+    // Bu fonksiyon hem Konsolosluk Takibi'nden hem Tamamlandı sekmesinden çağrılabiliyor —
+    // hangi sayfadaysak onu yeniden çiz, sabit renderConsulate() ile yanlış sayfaya atlamayalım.
+    const curPage = localStorage.getItem('vizecrm_lastpage');
+    ({consulate:renderConsulate, completed:renderCompleted})[curPage]?.();
   } catch(e) { toast('Bağlantı hatası','red'); }
 }
 
@@ -2296,7 +2298,7 @@ function renderConsulate(){
 function renderCompleted(){
   const list=customers.filter(c=>c.status==='Tamamlandı').sort((a,b)=>new Date(b.lastModRaw||0)-new Date(a.lastModRaw||0));
   document.getElementById('main-content').innerHTML=`
-  <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Süreci tamamlanmış müşteriler. Bu listede görünmeleri için vize sonucunun "Onaylandı" olarak girilmesi gerekir (Konsolosluk Takibi'nden veya buradan). Vize tarihlerini buradan da düzenleyebilirsiniz.</div>
+  <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Süreci tamamlanmış müşteriler — vize sonucu ister onaylansın ister reddedilsin (reddedilme bir iptal değildir, sürecin bitmiş hâlidir), dosya buraya düşer. Vize sonucunu/tarihlerini Konsolosluk Takibi'nden veya buradan girip düzenleyebilirsiniz.</div>
   <div class="tbl-wrap">
     <div class="tbl-toolbar">
       <div class="tbl-label">${list.length} Müşteri Tamamlandı</div>
