@@ -1872,11 +1872,12 @@ async function bulkAddNote(){
   if(inp)inp.value='';
   toast('✓ '+ok+'/'+ids.length+' müşteriye not eklendi','green');
 }
+// Not: İlgilenmiyor / Tamamlandı / İptal buraya EKLENMEZ — bu statüler artık ana Müşteriler
+// listesinden kesin olarak hariç tutuluyor (bkz. computeCustFiltered), kendi sekmeleri var.
 const STAGE_GROUPS=[
-  {label:'📞 İletişim',options:['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İlgilenmiyor','İletişime Geçildi']},
+  {label:'📞 İletişim',options:['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İletişime Geçildi']},
   {label:'💼 Satış',options:['Ödeme Alındı']},
   {label:'📋 Operasyon',options:['Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı']},
-  {label:'✅ Sonuç',options:['Tamamlandı','İptal']},
 ];
 
 // Arama + aşama (çoklu) + ülke filtrelerini AND mantığıyla birleştirir
