@@ -1631,14 +1631,17 @@ function buildWarningsHTML(){
     if(a.level!==b.level) return a.level==='crit'?-1:1;
     return b.c.days-a.c.days;
   });
-  // Vize bitiş uyarısı (sadece yönetici)
+  // Vize bitiş uyarısı (sadece yönetici) — diğer uyarılarla AYNI şekilde ekleniyor
+  // ({level,c,msg,dept,icon}); farklı bir şekil (custId/type) kullanmak dashboard'un
+  // tamamen çökmesine sebep oluyordu, çünkü aşağıdaki render kodu her uyarının w.c
+  // içermesini bekliyor.
   if (CU.role==='management') {
     const today=new Date(); today.setHours(0,0,0,0);
     customers.filter(c=>c.visaEndDate&&c.visaResult==='Onaylandı').forEach(c=>{
       const exp=new Date(c.visaEndDate); exp.setHours(0,0,0,0);
       const days=Math.ceil((exp-today)/(1000*60*60*24));
-      if(days<=30&&days>=0) warnings.push({type:'visa',msg:`${c.name} — Vize ${days===0?'bugün':''+days+' gün içinde'} bitiyor (${fmtDate(c.visaEndDate)})`,custId:c.id});
-      else if(days<0) warnings.push({type:'visa',msg:`${c.name} — Vizesi ${Math.abs(days)} gün önce bitti (${fmtDate(c.visaEndDate)})`,custId:c.id});
+      if(days<=30&&days>=0) warnings.push({level: days<=7?'crit':'warn', c, msg:`Vize ${days===0?'bugün':days+' gün içinde'} bitiyor (${fmtDate(c.visaEndDate)})`, dept:'Vize', icon:'🛂'});
+      else if(days<0) warnings.push({level:'crit', c, msg:`Vizesi ${Math.abs(days)} gün önce bitti (${fmtDate(c.visaEndDate)})`, dept:'Vize', icon:'🔴'});
     });
   }
   _dashWarnings = warnings;
