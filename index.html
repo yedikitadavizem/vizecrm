@@ -937,8 +937,10 @@ function toast(msg,type='blue'){
 }
 
 function mapUser(raw,token){
+  // Not: şifre burada TUTULMAZ. Backend zaten password_hash'i hiç göndermiyor
+  // (login/validateSession yanıtından çıkarılıyor) ve tarayıcıda şifre saklamaya gerek yok.
   return {
-    username: raw.username, password: raw.password_hash, name: raw.name,
+    username: raw.username, name: raw.name,
     role: raw.role, color: raw.color || '#2563EB', repName: raw.rep_name,
     id: raw.id, superAdmin: raw.super_admin || false, token
   };
@@ -3411,6 +3413,45 @@ async function changeRole(un,newRole){
     toast('Bağlantı hatası','red');
   }
 }
+async function migratePasswords(){
+  try{
+    // 1. Adım: durum tespiti (hiçbir değişiklik yapmadan)
+    const sRes=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'migratePasswords',dryRun:true,token:CU.token})});
+    const s=await sRes.json();
+    if(!s.success){toast('Hata: '+(s.error?.message||s.error||'Durum alınamadı'),'red');return;}
+
+    if(s.pending===0){
+      alert('✅ Şifre güvenliği tamam.\n\nToplam '+s.total+' kullanıcının tümünün şifresi güvenli şekilde (hash\'lenmiş olarak) saklanıyor.\n\nYapmanız gereken bir şey yok.');
+      return;
+    }
+
+    const onay=confirm('🔐 ŞİFRE GÜVENLİĞİ\n\n'
+      +'Durum: '+s.pending+' kullanıcının şifresi hâlâ veritabanında OKUNABİLİR (düz metin) hâlde.\n'
+      +(s.alreadyHashed>0?'         '+s.alreadyHashed+' kullanıcının şifresi zaten güvenli.\n':'')
+      +'\nBu işlem şifreleri geri döndürülemez şekilde şifreler (hash\'ler).\n\n'
+      +'✔ Kimsenin şifresi DEĞİŞMEZ, herkes aynı şifresiyle girmeye devam eder.\n'
+      +'✔ Sadece saklanma biçimi güvenli hâle gelir.\n\n'
+      +'Devam edilsin mi?');
+    if(!onay)return;
+
+    // 2. Adım: parti parti işle (CPU limitine takılmamak için backend 25'erli işliyor)
+    let toplam=0, tur=0;
+    while(true){
+      tur++;
+      if(tur>20){toast('Çok fazla tur — kalanlar için tekrar çalıştırın','amber');break;}
+      const mRes=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'migratePasswords',dryRun:false,token:CU.token})});
+      const m=await mRes.json();
+      if(!m.success){toast('Hata: '+(m.error?.message||m.error||'İşlem başarısız'),'red');return;}
+      toplam+=m.migrated||0;
+      if(m.failed>0) toast(m.failed+' kayıt işlenemedi','amber');
+      if(!m.remaining||m.remaining<=0)break;
+      toast('İşleniyor... ('+toplam+' tamamlandı, '+m.remaining+' kaldı)','blue');
+    }
+    alert('✅ Tamamlandı!\n\n'+toplam+' kullanıcının şifresi artık güvenli şekilde saklanıyor.\n\nHerkes aynı şifresiyle girmeye devam edebilir — hiçbir şey değişmedi, sadece güvenli hâle geldi.');
+    renderUsers();
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
 async function sendPortalBulkEmails(){
   try{
     // 1. Adım: önce kaç kişiye gideceğini sor (mail atmadan)
@@ -3444,6 +3485,7 @@ async function renderUsers(){
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
     <div style="font-size:12px;color:var(--text2)">${allUsers.length} kullanıcı · ${mgrs.length} yönetici · ${rest.filter(u=>u.role==='sales').length} satış · ${rest.filter(u=>u.role==='evrak').length} evrak · ${rest.filter(u=>u.role==='randevu').length} randevu</div>
     <div style="display:flex;gap:8px">
+      ${CU.superAdmin?`<button class="btn btn-ghost btn-sm" onclick="migratePasswords()">🔐 Şifre Güvenliği</button>`:''}
       <button class="btn btn-ghost btn-sm" onclick="sendPortalBulkEmails()">📧 Portal Bilgilendirme Maili Gönder</button>
       <button class="btn btn-primary btn-sm" onclick="openAddUserForm()">+ Kullanıcı Ekle</button>
     </div>
@@ -3616,7 +3658,6 @@ async function savePw(){
       else toast('Hata: '+JSON.stringify(d.error),'red');
     });
   }
-  CU.password=np;
   toast('✓ Şifre güncellendi — tüm cihazlara yansıdı','green');['nd-cur','nd-new','nd-new2'].forEach(i=>document.getElementById(i).value='');document.getElementById('pw-msg').style.display='none';}
 
 // DETAIL PANEL
