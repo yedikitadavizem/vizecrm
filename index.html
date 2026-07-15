@@ -3496,16 +3496,19 @@ async function renderUsers(){
     const isSA = u.super_admin || false;
     const isMe = u.username === CU.username;
     const ucolor = u.color || '#7C3AED';
+    const isLocked = u.locked_until && new Date(u.locked_until) > new Date();
+    const lockMins = isLocked ? Math.max(1,Math.ceil((new Date(u.locked_until)-new Date())/60000)) : 0;
     return `<div class="user-card" style="border-color:${isSA?'var(--accent)':'var(--border)'}">
       <div style="display:flex;align-items:center;gap:12px">
         <div class="av av-32" style="background:${ucolor};color:#fff">${initials(u.name)}</div>
         <div>
-          <div style="font-weight:600;font-size:13px">${u.name} ${isSA?'<span style="font-size:10px;background:var(--accent-l);color:var(--accent);padding:2px 7px;border-radius:20px">⭐ Süper Admin</span>':''}</div>
-          <div style="font-size:11px;color:var(--text3)">@${u.username}</div>
+          <div style="font-weight:600;font-size:13px">${u.name} ${isSA?'<span style="font-size:10px;background:var(--accent-l);color:var(--accent);padding:2px 7px;border-radius:20px">⭐ Süper Admin</span>':''}${isLocked?' <span style="background:var(--red-bg);color:var(--red);font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px">🔒 KİLİTLİ</span>':''}</div>
+          <div style="font-size:11px;color:var(--text3)">@${u.username}${isLocked?' · <span style="color:var(--red)">'+lockMins+' dk sonra açılır</span>':''}</div>
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         ${(CU.superAdmin&&!isMe&&!isSA)?roleSelect(u):`<span class="badge b-manager">${isSA?'⭐ Süper Admin':'Yönetici'}</span>`}
+        ${(isLocked&&CU.superAdmin)?`<button class="btn btn-primary btn-sm" onclick="unlockUser('${u.username}')">🔓 Kilidi Aç</button>`:''}
         ${(CU.superAdmin||isMe)?`<button class="btn btn-ghost btn-sm" onclick="openEditUserModal('${u.username}')">👤 Profil</button><button class="btn btn-ghost btn-sm" onclick="editPw('${u.username}')">🔑 Şifre</button>`:'<span style="font-size:11px;color:var(--text3)">Düzenlenemez</span>'}
         ${(CU.superAdmin&&!isMe&&!isSA)?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.username}')">🗑 Sil</button>`:''}
       </div>
@@ -3517,13 +3520,16 @@ async function renderUsers(){
   ${rest.map(u=>{
     const cnt=customers.filter(c=>c.rep===u.name).length;
     const ucolor = u.color || '#2563EB';
+    const isLocked = u.locked_until && new Date(u.locked_until) > new Date();
+    const lockMins = isLocked ? Math.max(1,Math.ceil((new Date(u.locked_until)-new Date())/60000)) : 0;
     return `<div class="user-card">
       <div style="display:flex;align-items:center;gap:12px">
         <div class="av av-32" style="background:${ucolor};color:#fff">${initials(u.name)}</div>
-        <div><div style="font-weight:600;font-size:13px">${u.name}</div><div style="font-size:11px;color:var(--text3)">@${u.username} · ${cnt} müşteri</div></div>
+        <div><div style="font-weight:600;font-size:13px">${u.name}${isLocked?' <span style="background:var(--red-bg);color:var(--red);font-size:9px;font-weight:700;padding:2px 7px;border-radius:20px;vertical-align:middle">🔒 KİLİTLİ</span>':''}</div><div style="font-size:11px;color:var(--text3)">@${u.username} · ${cnt} müşteri${isLocked?' · <span style="color:var(--red)">'+lockMins+' dk sonra açılır</span>':''}</div></div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         ${(CU.role==='management')?roleSelect(u):`<span class="badge ${ROLE_BADGE_CLS[u.role]||'b-ops'}">${ROLE_LABELS[u.role]||u.role}</span>`}
+        ${isLocked?`<button class="btn btn-primary btn-sm" onclick="unlockUser('${u.username}')">🔓 Kilidi Aç</button>`:''}
         <button class="btn btn-ghost btn-sm" onclick="openEditUserModal('${u.username}')">👤 Profil</button>
         <button class="btn btn-ghost btn-sm" onclick="editPw('${u.username}')">🔑 Şifre</button>
         <button class="btn btn-amber btn-sm" onclick="resetPw('${u.username}')">🔄 Sıfırla</button>
@@ -3570,11 +3576,45 @@ async function editPw(un){
   renderUsers();
 }
 async function resetPw(un){
-  if(!confirm(un+' şifresini "satis123" olarak sıfırlamak istiyor musun?'))return;
-  const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePassword',username:un,newPassword:'satis123',token:CU.token})});
-  const d=await res.json();
-  if(d.success){toast('✓ Şifre sıfırlandı: satis123','amber');}
-  renderUsers();
+  if(!confirm(un+' kullanıcısının şifresi rastgele yeni bir şifreyle sıfırlanacak.\n\n• Yeni şifre size bir kez gösterilecek — not almayı unutmayın.\n• '+un+' kullanıcısının açık oturumları kapanacak, yeni şifreyle girmesi gerekecek.\n\nDevam edilsin mi?'))return;
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'resetPasswordRandom',username:un,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Sıfırlanamadı'),'red');return;}
+    showTempPasswordModal(un,d.password);
+    renderUsers();
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
+// Üretilen geçici şifreyi gösteren pencere — şifre bir daha görülemez, o yüzden kopyalanabilir olmalı
+function showTempPasswordModal(un,pw){
+  const m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:440px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px">🔑 Yeni Şifre Oluşturuldu</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px"><b>${esc(un)}</b> kullanıcısının yeni şifresi:</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:14px">
+      <input id="temp-pw-val" readonly value="${esc(pw)}" style="flex:1;font-family:monospace;font-size:18px;font-weight:700;letter-spacing:1px;text-align:center;padding:12px;border:2px dashed var(--accent);border-radius:10px;background:var(--accent-l);color:var(--text)">
+      <button class="btn btn-primary btn-sm" onclick="navigator.clipboard?.writeText('${esc(pw)}');this.textContent='✓ Kopyalandı'">📋 Kopyala</button>
+    </div>
+    <div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--text2);line-height:1.6;margin-bottom:16px">
+      ⚠️ <b>Bu şifre bir daha gösterilmeyecek.</b> Şimdi not alın veya kopyalayın.<br>
+      ${esc(un)} kullanıcısına iletin ve girdikten sonra kendi şifresini belirlemesini söyleyin.
+    </div>
+    <button class="btn btn-primary" style="width:100%" onclick="this.closest('div[style*=fixed]').remove()">Anladım, kapat</button>
+  </div>`;
+  document.body.appendChild(m);
+  m.querySelector('#temp-pw-val')?.select?.();
+}
+
+async function unlockUser(un){
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'unlockUser',username:un,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Kilit açılamadı'),'red');return;}
+    toast('✓ '+un+' kullanıcısının kilidi açıldı','green');
+    renderUsers();
+  }catch(e){toast('Bağlantı hatası','red');}
 }
 async function deleteUser(un){
   if(!confirm(un+' kullanıcısını silmek istediğine emin misin? Bu işlem geri alınamaz!'))return;
