@@ -8,93 +8,25 @@
 <script>
 // ============================================
 // SUPABASE BAĞLANTISI
-// Supabase kurulumundan sonra bu bilgileri doldurun:
 // ============================================
-const SUPABASE_URL = 'https://huhijoftpgizixwtjwpk.supabase.co';    // ← Supabase URL buraya
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh1aGlqb2Z0cGdpeml4d3Rqd3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDkzODg5NDgsImV4cCI6MjA2NDk2NDk0OH0.fWH8stLIPQ3RGjPomWUNtM3Dq_q5HsVz1ZHrFDjIgts';   // ← Supabase anon key buraya
-
+// GÜVENLİK NOTU: Supabase anon key BURADA TUTULMAZ ve tutulmamalıdır.
+// Bu dosya herkese açık bir repoda yayınlanıyor. Tüm veritabanı erişimi
+// Edge Function (bright-handler) üzerinden yapılır; gerçek anahtar orada,
+// sunucu tarafında (Deno.env) saklanır.
 const EDGE_FUNCTION_URL = 'https://huhijoftpgizixwtjwpk.supabase.co/functions/v1/bright-handler';
 
-let supabaseClient = null;
-let USE_SUPABASE = true; // Supabase bilgilerini girdikten sonra true yapın
-
-// Edge Function üzerinden bağlantı
+let USE_SUPABASE = true;
 if (EDGE_FUNCTION_URL && !EDGE_FUNCTION_URL.includes('XXXXX')) {
   USE_SUPABASE = true;
   console.log('✅ Supabase bağlantısı aktif');
 } else {
+  USE_SUPABASE = false;
   console.log('⚠️ Edge Function URL girilmedi');
 }
 
-// ============================================
-// SUPABASE VERİ FONKSİYONLARI
-// ============================================
-
-// Tüm müşterileri çek
-async function fetchCustomers() {
-  if (!USE_SUPABASE) return null;
-  const { data, error } = await supabaseClient
-    .from('customers')
-    .select('*, sales_rep:users!sales_rep_id(name), ops_user:users!ops_id(name)')
-    .order('created_at', { ascending: false });
-  if (error) { console.error('fetchCustomers:', error); return null; }
-  return data;
-}
-
-// Müşteri güncelle (status, ödeme vs.)
-async function updateCustomer(id, updates) {
-  if (!USE_SUPABASE) return null;
-  const { data, error } = await supabaseClient
-    .from('customers')
-    .update(updates)
-    .eq('id', id)
-    .select();
-  if (error) { console.error('updateCustomer:', error); return null; }
-  return data;
-}
-
-// Yeni müşteri ekle
-async function insertCustomer(customer) {
-  if (!USE_SUPABASE) return null;
-  const { data, error } = await supabaseClient
-    .from('customers')
-    .insert([customer])
-    .select();
-  if (error) { console.error('insertCustomer:', error); return null; }
-  return data;
-}
-
-// Not ekle
-async function insertNote(customerId, content, authorName) {
-  if (!USE_SUPABASE) return null;
-  const { data, error } = await supabaseClient
-    .from('notes')
-    .insert([{ customer_id: customerId, content, author_name: authorName }]);
-  if (error) { console.error('insertNote:', error); return null; }
-  return data;
-}
-
-// Arama kaydı ekle
-async function insertCallLog(customerId, result, note, callerName) {
-  if (!USE_SUPABASE) return null;
-  const { data, error } = await supabaseClient
-    .from('call_logs')
-    .insert([{ customer_id: customerId, result, note, caller_name: callerName }]);
-  if (error) { console.error('insertCallLog:', error); return null; }
-  return data;
-}
-
-// Status geçmişi ekle
-async function insertStatusHistory(customerId, fromStatus, toStatus, changedByName) {
-  if (!USE_SUPABASE) return null;
-  const { data, error } = await supabaseClient
-    .from('status_history')
-    .insert([{ customer_id: customerId, from_status: fromStatus, to_status: toStatus }]);
-  if (error) { console.error('insertStatusHistory:', error); return null; }
-  return data;
-}
-
-// Kullanıcı girişi - Edge Function üzerinden
+// Giriş — Edge Function üzerinden.
+// Backend'in hata mesajını ("3 deneme hakkınız kaldı", "Hesabınız 10 dakika
+// kilitlendi" gibi) olduğu gibi taşır ki giriş ekranında gösterilebilsin.
 async function signInUser(username, password) {
   try {
     const res = await fetch(EDGE_FUNCTION_URL, {
@@ -103,51 +35,15 @@ async function signInUser(username, password) {
       body: JSON.stringify({ action: 'login', username, password })
     });
     const data = await res.json();
-    if (!res.ok || data.error) return null;
+    if (!res.ok || data.error) {
+      const msg = typeof data.error === 'string' ? data.error : (data.error && data.error.message);
+      return { error: msg || 'Kullanıcı adı veya şifre hatalı.' };
+    }
     return data;  // { user, token }
   } catch(e) {
     console.error('Edge Function login hatası:', e);
-    return null;
+    return { error: 'Bağlantı hatası. İnternet bağlantınızı kontrol edin.' };
   }
-}
-
-// Şifre güncelle
-async function updatePassword(userId, newPassword) {
-  if (!USE_SUPABASE) return false;
-  const { error } = await supabaseClient
-    .from('users')
-    .update({ password_hash: newPassword })
-    .eq('id', userId);
-  return !error;
-}
-
-// Kullanıcı adı güncelle
-async function updateUsername(userId, newUsername) {
-  if (!USE_SUPABASE) return false;
-  const { error } = await supabaseClient
-    .from('users')
-    .update({ username: newUsername })
-    .eq('id', userId);
-  return !error;
-}
-
-// Ad güncelle
-async function updateDisplayName(userId, newName) {
-  if (!USE_SUPABASE) return false;
-  const { error } = await supabaseClient
-    .from('users')
-    .update({ name: newName, rep_name: newName })
-    .eq('id', userId);
-  return !error;
-}
-
-// Gerçek zamanlı müşteri güncellemeleri dinle
-function subscribeToCustomers(callback) {
-  if (!USE_SUPABASE) return;
-  supabaseClient
-    .channel('customers')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'customers' }, callback)
-    .subscribe();
 }
 </script>
 <style>
@@ -976,8 +872,10 @@ async function restoreSession(){
 }
 
 window.addEventListener('DOMContentLoaded', async function() {
-  if (!USE_SUPABASE || SUPABASE_URL.includes('XXXXX')) {
-    document.getElementById('supabase-banner').style.display = 'block';
+  // Not: 'supabase-banner' elemanı bu sayfada yok, o yüzden burada DOM'a dokunmuyoruz.
+  // Bağlantı yoksa zaten giriş denemesinde net bir hata mesajı gösteriliyor.
+  if (!USE_SUPABASE) {
+    console.warn('⚠️ Edge Function URL yapılandırılmamış — giriş yapılamaz.');
   }
   const restored=await restoreSession();
   if(restored){
@@ -991,12 +889,16 @@ window.addEventListener('DOMContentLoaded', async function() {
 async function doLogin(){
   const u=document.getElementById('lu').value.trim().toLowerCase(),p=document.getElementById('lp').value;
   let user = null;
+  let hataMesaji = 'Kullanıcı adı veya şifre hatalı.';
 
   // Sadece Edge Function / Supabase'den giriş — local fallback yok
   try {
     const result = await signInUser(u, p);
     if (result && result.user) {
       user = mapUser(result.user, result.token);
+    } else if (result && result.error) {
+      // Backend'in mesajını göster: kalan deneme hakkı, hesap kilidi vb.
+      hataMesaji = result.error;
     }
   } catch(e) {
     console.log('Login hatası:', e);
@@ -1004,7 +906,9 @@ async function doLogin(){
   }
 
   if(!user){
-    document.getElementById('lerr').style.display='block';
+    const el=document.getElementById('lerr');
+    el.textContent=hataMesaji;
+    el.style.display='block';
     document.getElementById('lp').value='';
     return;
   }
@@ -3567,11 +3471,16 @@ async function saveUserInfo(){
   }
 }
 async function editPw(un){
-  const p=prompt(un+' için yeni şifre:');
+  const p=prompt(un+' için yeni şifre (en az 6 karakter):');
   if(!p?.trim())return;
+  if(p.trim().length<6){toast('Şifre en az 6 karakter olmalı','red');return;}
   const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePassword',username:un,newPassword:p.trim(),token:CU.token})});
   const d=await res.json();
-  if(d.success){toast('✓ '+un+' şifresi güncellendi','green');}
+  if(d.success){
+    // Kendi şifresini değiştirdiyse backend yeni oturum kartı verir — kaydetmezsek atılırız
+    if(d.token && un===CU.username){CU.token=d.token;localStorage.setItem('vizecrm_token',CU.token);}
+    toast('✓ '+un+' şifresi güncellendi'+(un!==CU.username?' — açık oturumları kapatıldı':''),'green');
+  }
   else{toast('Hata: '+JSON.stringify(d.error),'red');}
   renderUsers();
 }
@@ -3694,11 +3603,16 @@ async function savePw(){
   // Yeni şifreyi Edge Function ile güncelle
   if(USE_SUPABASE){
     fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'updatePassword',username:CU.username,newPassword:np,token:CU.token})}).then(r=>r.json()).then(d=>{
-      if(d.success) toast('✓ Şifre güncellendi — tüm cihazlara yansıdı','green');
+      if(d.success){
+        // Şifre değişince eski oturumlar düşürülür; backend bize yeni bir oturum kartı verir.
+        // Onu kaydetmezsek kendi şifresini değiştiren kişi sistemden atılır.
+        if(d.token){CU.token=d.token;localStorage.setItem('vizecrm_token',CU.token);}
+        toast('✓ Şifre güncellendi — diğer cihazlardaki oturumlar kapatıldı','green');
+      }
       else toast('Hata: '+JSON.stringify(d.error),'red');
     });
   }
-  toast('✓ Şifre güncellendi — tüm cihazlara yansıdı','green');['nd-cur','nd-new','nd-new2'].forEach(i=>document.getElementById(i).value='');document.getElementById('pw-msg').style.display='none';}
+  ['nd-cur','nd-new','nd-new2'].forEach(i=>document.getElementById(i).value='');document.getElementById('pw-msg').style.display='none';}
 
 // DETAIL PANEL
 const RLABELS={ulasildi:'✅ Ulaşıldı',cevapsiz:'📵 Cevap Vermedi',sonra_ara:'🔄 Sonra Ara',mesaj:'💬 Mesaj Bırakıldı'};
