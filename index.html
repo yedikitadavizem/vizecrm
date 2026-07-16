@@ -2122,13 +2122,24 @@ function renderPipeline(){
 
 // REFUNDS
 function exportConsulateExcel(){
-  const list=customers.filter(c=>CONSULATE_WAIT_S.includes(c.status)).sort((a,b)=>b.days-a.days);
+  // Ekranda hangi filtreler uygulanıyorsa Excel de aynı listeyi dışa aktarır.
+  // (Filtre mantığı renderConsulate ile birebir aynı tutulmalı.)
+  const sq=consSearch.toLowerCase().trim();
+  const list=customers.filter(c=>{
+    if(!CONSULATE_WAIT_S.includes(c.status))return false;
+    if(sq&&!((c.name&&c.name.toLowerCase().includes(sq))||(c.id&&c.id.toLowerCase().includes(sq))||(c.phone&&c.phone.includes(sq))))return false;
+    if(consStatus&&c.status!==consStatus)return false;
+    if(consCountry&&c.country!==consCountry)return false;
+    if(consRep&&c.rep!==consRep&&c.evrakRep!==consRep&&c.randevuRep!==consRep)return false;
+    if(consDay&&(c.consulateDays??c.days)<consDay)return false;
+    return true;
+  }).sort((a,b)=>(b.consulateDays??b.days)-(a.consulateDays??a.days));
   if(list.length===0){toast('Dışa aktarılacak müşteri yok','red');return;}
   const headers=['Dosya No','Ad Soyad','Telefon','E-posta','Ülke','Vize Türü','Aşama','Satış Temsilcisi','Evrak Sorumlusu','Randevu Sorumlusu','Bekleme Süresi (gün)','Kayıt Tarihi','Son Güncelleme'];
   const rows=list.map(c=>[
     c.id,c.name,c.phone,c.email||'',c.country,c.visa,c.status,
     c.rep||'—',c.evrakRep||'—',c.randevuRep||'—',
-    c.days,c.created||'',c.lastMod||''
+    (c.consulateDays??c.days),c.created||'',c.lastMod||''
   ]);
   const data=[headers,...rows];
   const ws=XLSX.utils.aoa_to_sheet(data);
