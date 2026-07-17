@@ -59,6 +59,18 @@
     .rep-card.ops .rep-role{color:#C2410C}
     .rep-card.ops .rep-phone{color:#C2410C;font-weight:600}
     .update-time{font-size:11px;color:#9CA3AF;text-align:center;margin-top:16px}
+    .last-update{display:flex;align-items:center;justify-content:center;gap:8px;background:#F0FDF4;border:1px solid #86EFAC;border-radius:12px;padding:12px 14px;margin-top:18px}
+    .last-update .lu-dot{width:8px;height:8px;border-radius:50%;background:#22C55E;flex-shrink:0;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.35}}
+    .last-update .lu-label{font-size:10px;color:#15803D;font-weight:700;text-transform:uppercase;letter-spacing:0.5px}
+    .last-update .lu-val{font-size:13px;color:#166534;font-weight:700}
+    .lu-ago{font-size:11px;color:#4D7C5F}
+    .companions{background:#FAF5FF;border:1px solid #E9D5FF;border-radius:12px;padding:14px 16px;margin-top:4px}
+    .comp-row{display:flex;align-items:center;gap:10px;padding:6px 0}
+    .comp-row:not(:last-child){border-bottom:1px solid #F3E8FF}
+    .comp-av{width:30px;height:30px;border-radius:50%;background:#A855F7;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
+    .comp-name{font-size:13px;font-weight:600;color:#111827}
+    .comp-rel{font-size:11px;color:#7E22CE;background:#F3E8FF;padding:1px 8px;border-radius:20px;font-weight:600}
     .btn-refresh{display:block;width:100%;padding:12px;background:#3B82F6;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:600;cursor:pointer;margin-top:16px;transition:background 0.2s}
     .btn-refresh:hover{background:#2563EB}
     .footer{text-align:center;font-size:11px;color:#9CA3AF;margin-top:20px;padding-bottom:8px}
@@ -86,7 +98,7 @@
 const EDGE_URL = 'https://huhijoftpgizixwtjwpk.supabase.co/functions/v1/bright-handler';
 
 // Status → step mapping
-// ⚠️ SENKRONİZASYON UYARISI: Bu liste bright-handler-v14.ts (SALES_STAGES/EVRAK_STAGES/RANDEVU_STAGES)
+// SENKRONİZASYON UYARISI: Bu liste bright-handler-v14.ts (SALES_STAGES/EVRAK_STAGES/RANDEVU_STAGES)
 // ve index__31_.html (CRM — KSTAGES, SCLS vb.) ile elle senkron tutuluyor. Yeni bir durum
 // eklerken/çıkarırken/adını değiştirirken HER ÜÇ dosyayı da güncelleyin.
 const STEPS = [
@@ -134,6 +146,22 @@ function repCard(role, name, phone, isOps) {
       ${phone ? `<a class="rep-phone" href="tel:${esc(phone)}">📞 ${esc(phone)}</a>` : ''}
     </div>
   </div>`;
+}
+
+// "3 saat önce", "dün", "5 gün önce" gibi okunabilir bir ifade üretir
+function zamanOnce(d) {
+  if (!d) return '';
+  const fark = Date.now() - new Date(d).getTime();
+  const dk = Math.floor(fark / 60000);
+  if (dk < 1) return 'az önce';
+  if (dk < 60) return dk + ' dakika önce';
+  const saat = Math.floor(dk / 60);
+  if (saat < 24) return saat + ' saat önce';
+  const gun = Math.floor(saat / 24);
+  if (gun === 1) return 'dün';
+  if (gun < 30) return gun + ' gün önce';
+  const ay = Math.floor(gun / 30);
+  return ay + ' ay önce';
 }
 
 function stepIcon(state) {
@@ -214,6 +242,22 @@ function render(data) {
       ? `<div class="result-banner cancelled">✕ Başvuru iptal edildi</div>`
       : '';
 
+  // Refakatçiler — varsa göster
+  const companionsHTML = (Array.isArray(data.companions) && data.companions.length)
+    ? `<div class="section">
+        <div class="status-label">Sizinle Birlikte Başvuranlar</div>
+        <div class="companions">
+          ${data.companions.map(c => `<div class="comp-row">
+            <div class="comp-av">${esc(initials(c.name))}</div>
+            <div style="flex:1">
+              <div class="comp-name">${esc(c.name)}</div>
+            </div>
+            ${c.relationship ? `<span class="comp-rel">${esc(c.relationship)}</span>` : ''}
+          </div>`).join('')}
+        </div>
+      </div>`
+    : '';
+
   document.getElementById('content').innerHTML = `
     <div class="section">
       <div class="file-no">${esc(data.fileNumber)}</div>
@@ -225,11 +269,19 @@ function render(data) {
       <div class="steps">${stepsHTML}</div>
       ${resultBannerHTML}
     </div>
+    ${companionsHTML}
     <div class="section">
       <div class="status-label">İletişim</div>
       ${contactHTML}
     </div>
-    <div class="update-time">Son güncelleme: ${fmtDT(data.lastUpdate)}</div>
+    <div class="last-update">
+      <div class="lu-dot"></div>
+      <div style="text-align:center">
+        <div class="lu-label">Son Güncelleme</div>
+        <div class="lu-val">${esc(zamanOnce(data.lastUpdate))}</div>
+        <div class="lu-ago">${esc(fmtDT(data.lastUpdate))}</div>
+      </div>
+    </div>
     <button class="btn-refresh" onclick="loadStatus()">↺ Yenile</button>
   `;
 }
