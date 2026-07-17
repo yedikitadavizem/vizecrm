@@ -2743,6 +2743,20 @@ function getCountryBreakdown(items) {
 
 function renderMuhasebePage() {
   const { items, giderList, custExpList, totalGelir, totalGider, totalCustExp, totalIade, bekleyenList, totalBekleyen, uniqueCustCount } = getMuhData(muhPeriod);
+  // Müşteri giderlerinin kategori kırılımı — "bu ay konsolosluk harçlarına ne kadar gitti"
+  const custExpCatMap = {};
+  custExpList.forEach(e=>{
+    const cat=e.category||'Diğer';
+    custExpCatMap[cat]=(custExpCatMap[cat]||0)+Number(e.amount||0);
+  });
+  const custExpCatRows = Object.entries(custExpCatMap).sort((a,b)=>b[1]-a[1]);
+  // Genel giderlerin kategori kırılımı
+  const giderCatMap = {};
+  giderList.forEach(e=>{
+    const cat=e.category||'Diğer';
+    giderCatMap[cat]=(giderCatMap[cat]||0)+Number(e.amount||0);
+  });
+  const giderCatRows = Object.entries(giderCatMap).sort((a,b)=>b[1]-a[1]);
   const netKar = totalGelir - totalGider - totalCustExp;
   const monthly = getMonthlyBreakdown();
   const repData = getRepBreakdown(items);
@@ -2777,10 +2791,11 @@ function renderMuhasebePage() {
       <div class="stat-val" style="color:var(--red)">${fmtTL(totalGider)}</div>
       <div class="stat-label">Genel Gider · ${giderList.length} kayıt</div>
     </div>
-    <div class="stat-card c-red">
+    <div class="stat-card c-red" style="cursor:pointer" onclick="document.getElementById('muh-custexp').scrollIntoView({behavior:'smooth'})">
       <div class="stat-icon" style="background:var(--red-bg);color:var(--red)">💸</div>
       <div class="stat-val" style="color:var(--red)">${fmtTL(totalCustExp)}</div>
       <div class="stat-label">Müşteri Giderleri · ${custExpList.length} kayıt</div>
+      <div class="stat-trend" style="color:var(--red);font-size:10px">Detay için tıkla →</div>
     </div>
     <div class="stat-card ${netKar>=0?'c-green':'c-red'}">
       <div class="stat-icon" style="background:${netKar>=0?'var(--green-bg)':'var(--red-bg)'};color:${netKar>=0?'var(--green)':'var(--red)'}">📊</div>
@@ -2929,6 +2944,9 @@ function renderMuhasebePage() {
         <button class="btn btn-ghost btn-sm" onclick="exportMuhGider()">📥 Excel</button>
       </div>
     </div>
+    ${giderCatRows.length?`<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
+      ${giderCatRows.map(([cat,tut])=>`<span style="font-size:11px;background:var(--surface2);border-radius:20px;padding:3px 10px">${esc(cat)}: <b>${fmtTL(tut)}</b> <span style="color:var(--text3)">%${totalGider>0?Math.round(tut/totalGider*100):0}</span></span>`).join('')}
+    </div>`:''}
     <table class="tbl">
       <thead><tr><th>Tarih</th><th>Kategori</th><th>Açıklama</th><th style="text-align:right">Tutar</th><th>Kaydeden</th><th></th></tr></thead>
       <tbody>
@@ -2940,12 +2958,179 @@ function renderMuhasebePage() {
             <td style="color:var(--text)">${e.description||'—'}</td>
             <td style="text-align:right;color:var(--red);font-weight:700">${fmtTL(e.amount)}</td>
             <td style="color:var(--text3);font-size:11px">${e.created_by||'—'}</td>
-            <td><button class="btn btn-danger btn-sm" onclick="deleteExpense('${e.id}')">Sil</button></td>
+            <td style="text-align:right;white-space:nowrap">
+              <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="editExpense('${e.id}')">✏️ Düzenle</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteExpense('${e.id}')">Sil</button>
+            </td>
           </tr>`).join('')
         }
       </tbody>
     </table>
+  </div>
+
+  <div class="tbl-wrap" id="muh-custexp" style="margin-top:20px">
+    <div class="tbl-toolbar">
+      <div class="tbl-label">💸 Müşteri Giderleri</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:11px;color:var(--text2)">${custExpList.length} kayıt · ${fmtTL(totalCustExp)}</span>
+      </div>
+    </div>
+    ${custExpCatRows.length?`<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap">
+      ${custExpCatRows.map(([cat,tut])=>`<span style="font-size:11px;background:var(--surface2);border-radius:20px;padding:3px 10px"><span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:${CUST_EXP_CAT_COLOR[cat]||'#6B7280'};margin-right:5px"></span>${esc(cat)}: <b>${fmtTL(tut)}</b></span>`).join('')}
+    </div>`:''}
+    <table class="tbl">
+      <thead><tr><th>Tarih</th><th>Dosya No</th><th>Müşteri</th><th>Kategori</th><th>Açıklama</th><th style="text-align:right">Tutar</th><th>Kaydeden</th><th></th></tr></thead>
+      <tbody>
+        ${custExpList.length===0?'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--text3)">Bu dönemde müşteri gideri yok</td></tr>':
+          custExpList.slice().sort((a,b)=>((b.expense_date||b.created_at||'')+'').localeCompare((a.expense_date||a.created_at||'')+'')).map(e=>{
+            const c=customers.find(x=>x.id===e.customer_file_number);
+            const expDate=e.expense_date||(e.created_at||'').slice(0,10);
+            const cat=e.category||'Diğer';
+            return `<tr onclick="openPanel('${e.customer_file_number}')" style="cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+              <td style="color:var(--text2);white-space:nowrap">${expDate?fmtDate(expDate):'—'}</td>
+              <td style="color:var(--text3);font-size:11px">${e.customer_file_number}</td>
+              <td style="font-weight:600">${c?esc(c.name):'—'}</td>
+              <td><span style="font-size:9px;font-weight:700;color:#fff;background:${CUST_EXP_CAT_COLOR[cat]||'#6B7280'};padding:2px 7px;border-radius:20px">${esc(cat)}</span></td>
+              <td style="color:var(--text3);font-size:11px">${esc(e.description)||'—'}</td>
+              <td style="text-align:right;color:var(--red);font-weight:700">${fmtTL(e.amount)}</td>
+              <td style="color:var(--text3);font-size:11px">${esc(e.created_by)||'—'}</td>
+              <td style="text-align:right;white-space:nowrap" onclick="event.stopPropagation()">
+                <button class="btn btn-ghost btn-sm" style="font-size:10px;padding:3px 8px" onclick="editCustExpense('${e.id}')">✏️ Düzenle</button>
+              </td>
+            </tr>`;
+          }).join('')
+        }
+      </tbody>
+    </table>
   </div>`;
+}
+
+// Müşteri bazında kârlılık: tahsil edilen − bu müşteriye yapılan giderler.
+// (Genel giderler — kira, maaş vb. — buraya dahil DEĞİLDİR; onlar müşteri bazına düşürülemez.)
+function renderProfitPanel(c, exps){
+  const tahsil = Number(c.prepay||0);
+  const ucret = Number(c.fee||0);
+  const bekleyen = Math.max(0, ucret - tahsil);
+  const gider = (exps||[]).reduce((s,e)=>s+Number(e.amount||0), 0);
+  const net = tahsil - gider;
+  const marj = tahsil>0 ? Math.round(net/tahsil*100) : 0;
+  const renk = net>=0 ? 'var(--green)' : 'var(--red)';
+  return '<div class="ps">'
+    +'<div class="ps-head"><div class="ps-title">📊 Bu Müşterinin Kârlılığı</div>'
+      +'<span style="font-size:11px;font-weight:700;color:'+renk+'">'+(net>=0?'+':'−')+fmtTL(Math.abs(net))+(tahsil>0?' · %'+marj+' marj':'')+'</span>'
+    +'</div>'
+    +'<div class="ps-body">'
+      +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0">'
+        +'<span style="color:var(--text2)">Tahsil edilen</span><span style="font-weight:600;color:var(--green)">+'+fmtTL(tahsil)+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:12px;padding:4px 0">'
+        +'<span style="color:var(--text2)">Müşteri giderleri</span><span style="font-weight:600;color:var(--red)">'+(gider>0?'−'+fmtTL(gider):'₺0')+'</span></div>'
+      +'<div style="display:flex;justify-content:space-between;font-size:13px;padding:8px 0 4px;border-top:1px solid var(--border);margin-top:4px">'
+        +'<span style="font-weight:700">Net</span><span style="font-weight:800;color:'+renk+'">'+(net>=0?'+':'−')+fmtTL(Math.abs(net))+'</span></div>'
+      +(bekleyen>0
+        ? '<div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:8px;padding:8px 10px;margin-top:8px;font-size:11px;color:var(--text2)">'
+          +'⏳ Henüz tahsil edilmemiş: <b>'+fmtTL(bekleyen)+'</b> — tahsil edilirse net <b style="color:var(--green)">'+fmtTL(net+bekleyen)+'</b> olur.</div>'
+        : '')
+      +'<div style="font-size:10px;color:var(--text3);margin-top:8px">Genel giderler (kira, maaş vb.) bu hesaba dahil değildir.</div>'
+    +'</div>'
+    +'</div>';
+}
+
+// ─── GİDER DÜZENLEME ───
+
+function editExpense(id){
+  const e=expenses.find(x=>String(x.id)===String(id));
+  if(!e){toast('Gider bulunamadı','red');return;}
+  const cats=['Kira','Maas','Ofis','Reklam','Ulasim','Diger'];
+  const m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-size:16px;font-weight:700;margin-bottom:16px">✏️ Gideri Düzenle</div>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Tarih</label>
+    <input type="date" id="ee-date" class="fi2" value="${e.date||''}" style="width:100%;padding:9px;margin-bottom:10px">
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Kategori</label>
+    <select id="ee-cat" class="sel" style="width:100%;padding:9px;margin-bottom:10px">
+      ${cats.map(c=>`<option ${e.category===c?'selected':''}>${c}</option>`).join('')}
+    </select>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Tutar (₺)</label>
+    <input type="number" id="ee-amt" class="fi2" value="${e.amount||0}" min="1" style="width:100%;padding:9px;margin-bottom:10px">
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Açıklama</label>
+    <input type="text" id="ee-desc" class="fi2" value="${esc(e.description||'')}" style="width:100%;padding:9px;margin-bottom:14px">
+    <div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--text2);margin-bottom:14px">
+      ⚠️ Tarihi değiştirmek bu giderin hangi aya sayıldığını değiştirir.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="this.closest('div[style*=fixed]').remove()">Vazgeç</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveExpenseEdit('${id}')">✓ Kaydet</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+async function saveExpenseEdit(id){
+  const expDate=document.getElementById('ee-date')?.value;
+  const expCategory=document.getElementById('ee-cat')?.value;
+  const expAmount=parseFloat(document.getElementById('ee-amt')?.value);
+  const expDescription=(document.getElementById('ee-desc')?.value||'').trim();
+  if(!expDate){toast('Tarih seçiniz','red');return;}
+  if(!expAmount||expAmount<=0){toast('Geçerli tutar giriniz','red');return;}
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'updateExpense',expenseId:id,expDate,expCategory,expAmount,expDescription,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Güncellenemedi'),'red');return;}
+    document.querySelector('div[style*=fixed]')?.remove();
+    toast('✓ Gider güncellendi','green');
+    await renderMuhasebe();
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
+function editCustExpense(id){
+  const e=allCustExpenses.find(x=>String(x.id)===String(id));
+  if(!e){toast('Gider bulunamadı','red');return;}
+  const c=customers.find(x=>x.id===e.customer_file_number);
+  const curDate=e.expense_date||(e.created_at||'').slice(0,10);
+  const m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">✏️ Müşteri Giderini Düzenle</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px"><b>${c?esc(c.name):e.customer_file_number}</b></div>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Tarih</label>
+    <input type="date" id="ce-date" class="fi2" value="${curDate}" style="width:100%;padding:9px;margin-bottom:10px">
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Kategori</label>
+    <select id="ce-cat" class="sel" style="width:100%;padding:9px;margin-bottom:10px">
+      ${CUST_EXP_CATS.map(x=>`<option ${(e.category||'Diğer')===x?'selected':''}>${x}</option>`).join('')}
+    </select>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Tutar (₺)</label>
+    <input type="number" id="ce-amt" class="fi2" value="${e.amount||0}" min="1" style="width:100%;padding:9px;margin-bottom:10px">
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Açıklama</label>
+    <input type="text" id="ce-desc" class="fi2" value="${esc(e.description||'')}" style="width:100%;padding:9px;margin-bottom:14px">
+    <div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--text2);margin-bottom:14px">
+      ⚠️ Tarihi değiştirmek bu giderin hangi aya sayıldığını değiştirir.
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="this.closest('div[style*=fixed]').remove()">Vazgeç</button>
+      <button class="btn btn-primary" style="flex:1" onclick="saveCustExpenseEdit('${id}')">✓ Kaydet</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+async function saveCustExpenseEdit(id){
+  const custExpDate=document.getElementById('ce-date')?.value;
+  const custExpCategory=document.getElementById('ce-cat')?.value;
+  const custExpAmount=parseFloat(document.getElementById('ce-amt')?.value);
+  const custExpDesc=(document.getElementById('ce-desc')?.value||'').trim();
+  if(!custExpDate){toast('Tarih seçiniz','red');return;}
+  if(!custExpAmount||custExpAmount<=0){toast('Geçerli tutar giriniz','red');return;}
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'updateCustomerExpense',custExpId:id,custExpDate,custExpCategory,custExpAmount,custExpDesc,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Güncellenemedi'),'red');return;}
+    document.querySelector('div[style*=fixed]')?.remove();
+    toast('✓ Müşteri gideri güncellendi','green');
+    await renderMuhasebe();
+  }catch(e){toast('Bağlantı hatası','red');}
 }
 
 // ─── EXCEL EXPORT FONKSİYONLARI ───
@@ -3133,11 +3318,11 @@ function exportMuhTamRapor() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([gdrH,...gdrR]), 'Genel-Gider');
 
   // Sheet 8: Müşteri Giderleri
-  const cgH = ['Dosya No','Müşteri','Tutar','Açıklama','Kaydeden','Tarih'];
+  const cgH = ['Dosya No','Müşteri','Kategori','Tutar','Açıklama','Kaydeden','Tarih'];
   const cgR = custExpList.map(function(e){
     const c=customers.find(function(x){return x.id===e.customer_file_number;});
     const expDate = e.expense_date || (e.created_at?e.created_at.slice(0,10):'');
-    return [e.customer_file_number,c?c.name:'—',Number(e.amount),e.description||'',e.created_by||'',expDate];
+    return [e.customer_file_number,c?c.name:'—',e.category||'Diğer',Number(e.amount),e.description||'',e.created_by||'',expDate];
   });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cgH,...cgR]), 'Musteri-Giderleri');
 
@@ -3203,15 +3388,22 @@ function openMuhDetailModal(type, value) {
 }
 
 
+// Müşteri gideri kategorileri — backend'deki CUSTOMER_EXPENSE_CATEGORIES ile AYNI olmalı
+const CUST_EXP_CATS = ['Konsolosluk Harcı','Kargo','Tercüme','Sigorta','VIP Randevu','Diğer'];
+const CUST_EXP_CAT_COLOR = {'Konsolosluk Harcı':'#DC2626','Kargo':'#D97706','Tercüme':'#7C3AED','Sigorta':'#2563EB','VIP Randevu':'#059669','Diğer':'#6B7280'};
+
 function renderCustExpPanel(custId, exps, readOnly) {
   var total = exps.reduce(function(s,e){ return s+Number(e.amount||0); }, 0);
   var list = exps.length===0
     ? '<div style="font-size:11px;color:var(--text3);padding:4px 0">Henüz gider kaydı yok</div>'
     : exps.map(function(e){
         var expDate = e.expense_date || (e.created_at||'').slice(0,10); // eski kayıtlarda expense_date yoksa kayıt tarihine düş
+        var cat = e.category || 'Diğer';
+        var catColor = CUST_EXP_CAT_COLOR[cat] || '#6B7280';
         return '<div style="display:flex;align-items:center;justify-content:space-between;padding:6px 10px;background:var(--surface2);border-radius:6px;margin-bottom:4px;font-size:12px">'
           +'<div><span style="font-weight:600;color:var(--red)">-'+fmtTL(Number(e.amount))+'</span>'
           +' <span style="font-size:11px;color:var(--accent);font-weight:600">📅 '+fmtDate(expDate)+'</span>'
+          +' <span style="font-size:9px;font-weight:700;color:#fff;background:'+catColor+';padding:1px 6px;border-radius:20px">'+esc(cat)+'</span>'
           +(e.description?' <span style="color:var(--text2);font-size:11px">'+esc(e.description)+'</span>':'')
           +'<div style="font-size:10px;color:var(--text3)">ekleyen: '+e.created_by+' · '+fmtDT(e.created_at)+'</div></div>'
           +(!readOnly?'<button class="btn btn-danger btn-sm" style="font-size:10px;padding:2px 6px" onclick="deleteCustExpense(\''+custId+'\',\''+e.id+'\')">Sil</button>':'')
@@ -3221,8 +3413,11 @@ function renderCustExpPanel(custId, exps, readOnly) {
   var addForm = !readOnly
     ? '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
         +'<input type="date" id="cexp-date-'+custId+'" class="fi2" value="'+todayStr+'" style="padding:5px 8px;font-size:12px" title="Giderin gerçekte hangi tarihte olduğu">'
+        +'<select id="cexp-cat-'+custId+'" class="sel" style="padding:5px 8px;font-size:12px">'
+          +CUST_EXP_CATS.map(function(c){return '<option>'+c+'</option>';}).join('')
+        +'</select>'
         +'<input type="number" id="cexp-amt-'+custId+'" class="fi2" placeholder="Tutar ₺" style="padding:5px 8px;width:90px;font-size:12px" min="1">'
-        +'<input type="text" id="cexp-desc-'+custId+'" class="fi2" placeholder="Açıklama (ör: Konsolosluk randevu)" style="padding:5px 8px;flex:1;font-size:12px;min-width:140px">'
+        +'<input type="text" id="cexp-desc-'+custId+'" class="fi2" placeholder="Açıklama (isteğe bağlı)" style="padding:5px 8px;flex:1;font-size:12px;min-width:120px">'
         +'<button class="btn btn-danger btn-sm" onclick="addCustExpense(\''+custId+'\')">+ Gider Ekle</button>'
         +'</div>'
     : '';
@@ -3236,14 +3431,15 @@ function renderCustExpPanel(custId, exps, readOnly) {
 
 async function addCustExpense(custId) {
   var expDate = document.getElementById('cexp-date-'+custId)?.value || new Date().toISOString().slice(0,10);
+  var cat = document.getElementById('cexp-cat-'+custId)?.value || 'Diğer';
   var amt = parseFloat(document.getElementById('cexp-amt-'+custId)?.value);
   var desc = (document.getElementById('cexp-desc-'+custId)?.value||'').trim();
   if(!amt||amt<=0){toast('Tutar giriniz','red');return;}
   try{
-    var res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addCustomerExpense',customerId:custId,custExpAmount:amt,custExpDesc:desc,custExpDate:expDate,token:CU.token})});
+    var res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addCustomerExpense',customerId:custId,custExpAmount:amt,custExpDesc:desc,custExpDate:expDate,custExpCategory:cat,token:CU.token})});
     var d=await res.json();
     if(!d.success){toast('Hata: '+(d.error?.message||'Eklenemedi'),'red');return;}
-    toast('-'+fmtTL(amt)+' gider eklendi','green');
+    toast('-'+fmtTL(amt)+' gider eklendi ('+cat+')','green');
     await openPanel(custId,panelReadOnly);
   }catch(e){toast('Bağlantı hatası','red');}
 }
@@ -4023,6 +4219,7 @@ async function openPanel(id, readonly=false){
 
 
   ${(CU.role==='management'||CU.role==='evrak'||CU.role==='randevu')?renderCustExpPanel(c.id,panelCustExpenses,panelReadOnly&&!panelSalesView):''}
+  ${CU.role==='management'?renderProfitPanel(c,panelCustExpenses):''}
   <div class="ps">
     <div class="ps-head"><div class="ps-title">Belgeler</div></div>
     <div class="ps-body" style="display:flex;flex-direction:column;gap:6px">
