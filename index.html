@@ -2485,15 +2485,25 @@ const EXP_CATS = ['Kira','Maas','Ofis','Reklam','Ulasim','Diger'];
 
 async function renderMuhasebe() {
   document.getElementById('main-content').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div>';
+  // ÖNEMLİ: burada eskiden hata sessizce yutuluyordu (catch → boş liste). Sonuç: gider
+  // verisi çekilemediğinde ekran hatasızca "₺0" gösteriyor, kimse sorunu fark etmiyordu.
+  // Artık hata varsa açıkça bildiriliyor.
+  let hatalar = [];
   try {
     const [r1,r2] = await Promise.all([
       fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getExpenses',token:CU.token})}),
       fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getAllCustomerExpenses',token:CU.token})})
     ]);
     const [d1,d2] = await Promise.all([r1.json(),r2.json()]);
-    expenses = d1.expenses || [];
-    allCustExpenses = d2.expenses || [];
-  } catch(e) { expenses = []; allCustExpenses = []; }
+    if(d1.error){ hatalar.push('Genel giderler: '+(typeof d1.error==='string'?d1.error:d1.error.message||'okunamadı')); expenses=[]; }
+    else expenses = d1.expenses || [];
+    if(d2.error){ hatalar.push('Müşteri giderleri: '+(typeof d2.error==='string'?d2.error:d2.error.message||'okunamadı')); allCustExpenses=[]; }
+    else allCustExpenses = d2.expenses || [];
+  } catch(e) {
+    expenses = []; allCustExpenses = [];
+    hatalar.push('Bağlantı hatası');
+  }
+  if(hatalar.length) toast('⚠️ '+hatalar.join(' · '),'red');
   renderMuhasebePage();
 }
 
