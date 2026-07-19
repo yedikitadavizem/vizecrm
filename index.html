@@ -538,6 +538,7 @@ async function loadCustomers(){
       tc:r.tc_kimlik||'',
       lastModBy:r.last_modified_by||'',
       paymentDate:r.payment_date||'',
+      invoiceIssued:r.invoice_issued===true,
       // DİKKAT: paymentDate = EN SON ödeme tarihi (taksit gelince değişir).
       // firstPaymentDate = İLK ödeme tarihi (değişmez) — randevu bekleme sayacı bunu kullanır.
       firstPaymentDate:r.first_payment_date||null,
@@ -1351,14 +1352,14 @@ function showAllCustomersDetail(){
 function exportAllCustomersExcel(){
   const all=getDashFiltered();
   if(all.length===0){toast('Dışa aktarılacak müşteri yok','red');return;}
-  const headers=['Dosya No','Ad Soyad','Telefon','E-posta','Ülke','Vize Türü','Aşama','Satış Temsilcisi','Evrak Sorumlusu','Randevu Sorumlusu','Toplam Ücret (₺)','Ön Ödeme (₺)','Kalan (₺)','Kayıt Tarihi','Son Güncelleme','Son Güncelleyen'];
+  const headers=['Dosya No','Ad Soyad','Telefon','E-posta','Ülke','Vize Türü','Aşama','Satış Temsilcisi','Evrak Sorumlusu','Randevu Sorumlusu','Toplam Ücret (₺)','Ön Ödeme (₺)','Kalan (₺)','Fatura Durumu','Kayıt Tarihi','Son Güncelleme','Son Güncelleyen'];
   const rows=all.map(c=>{
     const rem=(c.fee||0)-(c.prepay||0);
-    return [c.id,c.name,c.phone,c.email||'',c.country,c.visa,c.status,c.rep||'—',c.evrakRep||'—',c.randevuRep||'—',c.fee||0,c.prepay||0,rem>0?rem:0,c.created||'',c.lastMod||'',c.lastModBy||'—'];
+    return [c.id,c.name,c.phone,c.email||'',c.country,c.visa,c.status,c.rep||'—',c.evrakRep||'—',c.randevuRep||'—',c.fee||0,c.prepay||0,rem>0?rem:0,c.invoiceIssued?'Kesildi':'Kesilmedi',c.created||'',c.lastMod||'',c.lastModBy||'—'];
   });
   const data=[headers,...rows];
   const ws=XLSX.utils.aoa_to_sheet(data);
-  ws['!cols']=[{wch:16},{wch:22},{wch:14},{wch:25},{wch:14},{wch:18},{wch:22},{wch:18},{wch:18},{wch:18},{wch:14},{wch:14},{wch:14},{wch:18},{wch:18},{wch:18}];
+  ws['!cols']=[{wch:16},{wch:22},{wch:14},{wch:25},{wch:14},{wch:18},{wch:22},{wch:18},{wch:18},{wch:18},{wch:14},{wch:14},{wch:14},{wch:14},{wch:18},{wch:18},{wch:18}];
   const wb=XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Tüm Müşteriler');
   XLSX.writeFile(wb,`tum-musteriler-${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -3329,12 +3330,13 @@ function exportMuhCountry() {
 function exportMuhTahsilat() {
   const { items } = getMuhData(muhPeriod);
   if (!items.length) { toast('Bu dönemde ödeme yok','red'); return; }
-  const headers = ['Tarih','Dosya No','Müşteri','Ülke','Temsilci','Tutar (₺)','Not'];
-  const rows = items.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>[
-    p.date, p.fileNo, p.name, p.country, p.rep, p.amount, p.note||''
-  ]);
+  const headers = ['Tarih','Dosya No','Müşteri','Ülke','Temsilci','Tutar (₺)','Fatura Durumu','Not'];
+  const rows = items.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>{
+    const c=customers.find(x=>x.id===p.fileNo);
+    return [p.date, p.fileNo, p.name, p.country, p.rep, p.amount, (c&&c.invoiceIssued)?'Kesildi':'Kesilmedi', p.note||''];
+  });
   const ws = XLSX.utils.aoa_to_sheet([headers,...rows]);
-  ws['!cols'] = [{wch:12},{wch:16},{wch:22},{wch:14},{wch:16},{wch:12},{wch:24}];
+  ws['!cols'] = [{wch:12},{wch:16},{wch:22},{wch:14},{wch:16},{wch:12},{wch:14},{wch:24}];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb,ws,'Odeme Detayi');
   XLSX.writeFile(wb,`muhasebe-odemeler-${new Date().toISOString().slice(0,10)}.xlsx`);
@@ -3395,8 +3397,11 @@ function exportMuhTamRapor() {
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([cntH,...cntR]), 'Ulke');
 
   // Sheet 5: Odemeler (tamItems'dan alınıyor, yukarıda tanımlı)
-  const tahH = ['Tarih','Dosya No','Musteri','Ulke','Temsilci','Tutar','Not'];
-  const tahR = tamItems.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>[p.date,p.fileNo,p.name,p.country,p.rep,p.amount,p.note||'']);
+  const tahH = ['Tarih','Dosya No','Musteri','Ulke','Temsilci','Tutar','Fatura Durumu','Not'];
+  const tahR = tamItems.sort((a,b)=>(b.date||'').localeCompare(a.date||'')).map(p=>{
+    const c=customers.find(x=>x.id===p.fileNo);
+    return [p.date,p.fileNo,p.name,p.country,p.rep,p.amount,(c&&c.invoiceIssued)?'Kesildi':'Kesilmedi',p.note||''];
+  });
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([tahH,...tahR]), 'Odemeler');
 
   // Sheet 7: Genel Gider
@@ -4300,6 +4305,17 @@ async function openPanel(id, readonly=false){
         <span style="font-size:12px;font-weight:700;color:${pct>=100?'var(--green)':'var(--amber)'}">%${pct}</span>
       </div>
     </div>
+    <div class="pay-row" style="border-top:1px solid var(--border)">
+      <div class="pay-lbl" style="font-weight:600">📄 Fatura Durumu</div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${c.invoiceIssued
+          ? '<span class="pbadge pb-ok">✓ Fatura Kesildi</span>'
+          : '<span class="pbadge" style="background:var(--amber-bg);color:var(--amber)">⏳ Fatura Kesilmedi</span>'}
+        ${CU.role==='management'
+          ? `<button class="btn btn-ghost btn-sm" style="font-size:11px" onclick="toggleInvoice('${c.id}',${c.invoiceIssued?'false':'true'})">${c.invoiceIssued?'Kesilmedi olarak işaretle':'Kesildi olarak işaretle'}</button>`
+          : ''}
+      </div>
+    </div>
   </div>
 
 
@@ -4741,6 +4757,19 @@ async function deletePanelPayment(custId, payId) {
   } catch(e) { toast('Bağlantı hatası','red'); }
 }
 
+async function toggleInvoice(custId, yeniDurum){
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({action:'setInvoiceStatus',customerId:custId,invoiceIssued:yeniDurum,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Güncellenemedi'),'red');return;}
+    toast(yeniDurum?'✓ Fatura kesildi olarak işaretlendi':'Fatura kesilmedi olarak işaretlendi','green');
+    await loadCustomers();
+    await openPanel(custId, panelReadOnly);
+    if(document.getElementById('cust-tbody'))renderRows();
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
 async function updatePayment(id){
   const feeEl=document.getElementById('ed-fee-'+id);
   const fee=feeEl&&feeEl.value!==''?parseFloat(feeEl.value)||0:null;
@@ -4800,7 +4829,7 @@ async function exportExcel(){
       'Dosya No','Ad Soyad','Telefon','E-posta',
       'Ülke','Vize Türü','Aşama',
       'Satış Temsilcisi','Evrak Sorumlusu','Randevu Sorumlusu',
-      'Toplam Ücret (₺)','Ön Ödeme (₺)','Kalan Ödeme (₺)','Ödeme Durumu',
+      'Toplam Ücret (₺)','Ön Ödeme (₺)','Kalan Ödeme (₺)','Ödeme Durumu','Fatura Durumu',
       'Randevu Tarihi','Randevu Saati','Randevu Merkezi',
       'İade Durumu','İade Tutarı (₺)','İade Nedeni',
       'Refakatçi Sayısı','Refakatçiler',
@@ -4837,6 +4866,7 @@ async function exportExcel(){
         c.prepay||0,
         rem>0?rem:0,
         paidFull?'Tahsil Edildi':'Bekliyor',
+        c.invoiceIssued?'Kesildi':'Kesilmedi',
         c.apptDate||'',
         c.apptTime||'',
         c.apptCenter||'',
