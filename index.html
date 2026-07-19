@@ -857,8 +857,23 @@ function resetIdleTimer(){
     }
   },IDLE_LIMIT_MS);
 }
+
+// PERFORMANS TAKİBİ — "aktif süre" ölçümü.
+// Gerçek etkileşim (fare/klavye) olduğunda, en fazla 2 dakikada bir sunucuya "hâlâ aktifim"
+// sinyali gönderilir. Böylece sekmeyi açık unutup giden kişi "aktif" sayılmaz — süre
+// gerçek kullanımı yansıtır. Sık istek atmamak için 2 dakika kısıtı var.
+let lastHeartbeat=0;
+const HEARTBEAT_INTERVAL_MS=2*60*1000;
+function sendHeartbeat(){
+  if(!CU||!CU.token)return;
+  const now=Date.now();
+  if(now-lastHeartbeat<HEARTBEAT_INTERVAL_MS)return;
+  lastHeartbeat=now;
+  fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'heartbeat',token:CU.token})}).catch(()=>{});
+}
+
 ['mousemove','keydown','click','scroll','touchstart'].forEach(evt=>{
-  document.addEventListener(evt, ()=>{ if(CU) resetIdleTimer(); });
+  document.addEventListener(evt, ()=>{ if(CU){ resetIdleTimer(); sendHeartbeat(); } });
 });
 
 async function restoreSession(){
@@ -948,6 +963,7 @@ function renderNavMenu(){
   document.getElementById('sb-nav').innerHTML=`
     <div class="sb-sec">Ana Menü</div>
     ${isM?'<button class="nav-item" onclick="showPage(\'dashboard\')"><span class="nav-icon">📊</span> Dashboard</button>':''}
+    <button class="nav-item" onclick="showPage(\'today\')"><span class="nav-icon">🎯</span> Bugün Ne Yapmalıyım</button>
     <button class="nav-item" onclick="showPage(\'customers\')"><span class="nav-icon">👥</span> Müşteriler</button>
     <button class="nav-item" onclick="showPage(\'pipeline\')"><span class="nav-icon">🗂</span> Pipeline</button>
     ${!isM?'<button class="nav-item" onclick="showPage(\'sold\')"><span class="nav-icon">📈</span> Satışlarım</button>':''}
@@ -955,7 +971,7 @@ function renderNavMenu(){
     ${isM?'<button class="nav-item" onclick="showPage(\'completed\')"><span class="nav-icon">✅</span> Tamamlandı'+(completedCount?' <span class="nav-badge">'+completedCount+'</span>':'')+'</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'cancelled\')"><span class="nav-icon">🚫</span> İptal Edilenler'+(cancelledCount?' <span class="nav-badge">'+cancelledCount+'</span>':'')+'</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'notinterested\')"><span class="nav-icon">😐</span> İlgilenmiyor'+(notInterestedCount?' <span class="nav-badge">'+notInterestedCount+'</span>':'')+'</button>':''}
-    ${isM?'<div class="sb-sec">Yönetim</div><button class="nav-item" onclick="showPage(\'muhasebe\')"><span class="nav-icon">💰</span> Muhasebe</button><button class="nav-item" onclick="showPage(\'refunds\')"><span class="nav-icon">↩</span> İadeler'+(refundCount?' <span class="nav-badge">'+refundCount+'</span>':'')+'</button><button class="nav-item" onclick="showPage(\'users\')"><span class="nav-icon">🔐</span> Kullanıcılar</button>':''}
+    ${isM?'<div class="sb-sec">Yönetim</div><button class="nav-item" onclick="showPage(\'muhasebe\')"><span class="nav-icon">💰</span> Muhasebe</button><button class="nav-item" onclick="showPage(\'performance\')"><span class="nav-icon">📊</span> Performans</button><button class="nav-item" onclick="showPage(\'refunds\')"><span class="nav-icon">↩</span> İadeler'+(refundCount?' <span class="nav-badge">'+refundCount+'</span>':'')+'</button><button class="nav-item" onclick="showPage(\'users\')"><span class="nav-icon">🔐</span> Kullanıcılar</button>':''}
   `;
   // Yeniden çizince 'active' sınıfı kaybolur — geri koy
   document.querySelector('[onclick="showPage(\''+aktifSayfa+'\')"]')?.classList.add('active');
@@ -979,13 +995,13 @@ async function initApp(){
     <div class="tb-search" id="tb-search-wrap"><span>🔍</span><input placeholder="Müşteri ara..." oninput="gSearch(this.value)"></div>
     <button class="btn btn-primary" onclick="openModal()">+ Yeni Müşteri</button>
   `;
-  const allowedPages=isM?['dashboard','customers','pipeline','consulate','completed','cancelled','notinterested','muhasebe','refunds','users','account']:['customers','pipeline','sold','account'];
+  const allowedPages=isM?['dashboard','today','customers','pipeline','consulate','completed','cancelled','notinterested','muhasebe','performance','refunds','users','account']:['today','customers','pipeline','sold','account'];
   const savedPage=localStorage.getItem('vizecrm_lastpage');
   const startPage=(savedPage&&allowedPages.includes(savedPage))?savedPage:(isM?'dashboard':'customers');
   await showPage(startPage);
 }
 
-const PTITLES={dashboard:'Dashboard',customers:'Müşteriler',pipeline:'Pipeline',sold:'Satışlarım',consulate:'Konsolosluk Takibi',completed:'Tamamlandı',cancelled:'İptal Edilenler',notinterested:'İlgilenmiyor',muhasebe:'Muhasebe',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
+const PTITLES={dashboard:'Dashboard',today:'Bugün Ne Yapmalıyım',customers:'Müşteriler',pipeline:'Pipeline',sold:'Satışlarım',consulate:'Konsolosluk Takibi',completed:'Tamamlandı',cancelled:'İptal Edilenler',notinterested:'İlgilenmiyor',muhasebe:'Muhasebe',performance:'Performans',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
 // Sayfa geçişlerinde YARIŞ KORUMASI:
 // showPage async — veri çekerken (await) kullanıcı başka sayfaya tıklarsa iki showPage
 // aynı anda çalışır. Yavaş olan sonra bitip ekranı ezerse, kullanıcı tıklamadığı sayfayı
@@ -1005,12 +1021,12 @@ async function showPage(p){
   soldSearch='';
   const searchWrap=document.getElementById('tb-search-wrap');
   if(searchWrap){searchWrap.style.display=(p==='dashboard')?'none':'';const si=searchWrap.querySelector('input');if(si)si.value='';}
-  if(p==='dashboard'||p==='customers'||p==='pipeline'||p==='refunds'||p==='consulate'||p==='completed'||p==='cancelled'||p==='notinterested'||p==='muhasebe')await loadCustomers();
+  if(p==='dashboard'||p==='today'||p==='customers'||p==='pipeline'||p==='refunds'||p==='consulate'||p==='completed'||p==='cancelled'||p==='notinterested'||p==='muhasebe')await loadCustomers();
   if(mySeq!==navSeq) return; // kullanıcı başka sayfaya geçti — bu render'ı çöpe at
   if((p==='dashboard'||p==='muhasebe')&&CU.role==='management') await loadAllPayments();
   if(mySeq!==navSeq) return;
   refreshNavBadges(); // veri tazelendi, kenar çubuğu sayaçları da güncellensin
-  await ({dashboard:renderDash,customers:renderCusts,pipeline:renderPipeline,sold:renderSold,consulate:renderConsulate,completed:renderCompleted,cancelled:renderCancelled,notinterested:renderNotInterested,muhasebe:renderMuhasebe,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
+  await ({dashboard:renderDash,today:renderToday,customers:renderCusts,pipeline:renderPipeline,sold:renderSold,consulate:renderConsulate,completed:renderCompleted,cancelled:renderCancelled,notinterested:renderNotInterested,muhasebe:renderMuhasebe,performance:renderPerformance,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
 }
 function gSearch(q){
   const sq=q.toLowerCase().trim();
@@ -2483,6 +2499,163 @@ function renderNotInterested(){
 let expenses = [];
 let allPayments = [];
 const EXP_CATS = ['Kira','Maas','Ofis','Reklam','Ulasim','Diger'];
+
+// "Bugün Ne Yapmalıyım" — kişiye özel, önceliklendirilmiş aksiyon listesi.
+function renderToday(){
+  const isM=CU.role==='management';
+  const benim=customers.filter(c=>{
+    if(c.status==='Tamamlandı'||c.status==='İptal'||c.status==='İlgilenmiyor')return false;
+    if(isM)return true;
+    return c.rep===CU.name||c.evrakRep===CU.name||c.randevuRep===CU.name;
+  });
+  const acil=[], bugun=[], yaklasan=[];
+  benim.forEach(c=>{
+    const si=getStaleWait(c);
+    if(c.apptDate){
+      const gun=Math.ceil((new Date(c.apptDate)-new Date())/86400000);
+      if(gun>=0&&gun<=3){
+        (gun<=1?acil:bugun).push({c,msg:`Randevu ${gun===0?'BUGÜN':gun===1?'yarın':gun+' gün sonra'} (${fmtDate(c.apptDate)})`,icon:'📅'});
+        return;
+      }
+    }
+    if(!si)return;
+    if(si.wait>=14) acil.push({c,msg:`${si.wait} gündür ${si.basis} bekliyor`,icon:'🔴'});
+    else if(si.wait>=7) bugun.push({c,msg:`${si.wait} gündür ${si.basis} bekliyor`,icon:'⚠️'});
+    else if(si.wait>=3&&WARN_SALES_S.includes(c.status)) yaklasan.push({c,msg:`${si.wait} gündür güncellenmedi`,icon:'📞'});
+  });
+  const bugunStr=new Date().toLocaleDateString('tr-TR',{weekday:'long',day:'numeric',month:'long'});
+  function grup(baslik, list, renk, aciklama){
+    if(!list.length) return '';
+    return `<div style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <div style="font-size:14px;font-weight:700;color:${renk}">${baslik}</div>
+        <span style="background:${renk};color:#fff;font-size:11px;font-weight:700;padding:1px 8px;border-radius:20px">${list.length}</span>
+        <span style="font-size:11px;color:var(--text3)">${aciklama}</span>
+      </div>
+      ${list.map(item=>`<div onclick="openPanel('${item.c.id}')" style="display:flex;align-items:center;gap:12px;padding:11px 14px;background:var(--surface);border:1px solid var(--border);border-left:3px solid ${renk};border-radius:8px;margin-bottom:6px;cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background='var(--surface)'">
+        <span style="font-size:16px">${item.icon}</span>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:13px">${esc(item.c.name)} <span style="font-size:11px;color:var(--text3);font-weight:400">· ${esc(item.c.status)}</span></div>
+          <div style="font-size:11px;color:var(--text2)">${esc(item.msg)}</div>
+        </div>
+        <div style="font-size:11px;color:var(--text3)">${esc(item.c.phone||'')}</div>
+        <span style="font-size:16px;color:var(--text3)">›</span>
+      </div>`).join('')}
+    </div>`;
+  }
+  const toplam=acil.length+bugun.length+yaklasan.length;
+  document.getElementById('main-content').innerHTML=`
+  <div style="max-width:800px">
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;color:var(--text3);text-transform:capitalize">${bugunStr}</div>
+      <div style="font-size:15px;color:var(--text2);margin-top:2px">${toplam===0?'🎉 Harika! Bekleyen acil işin yok.':`Bugün ilgilenmen gereken <b style="color:var(--text)">${toplam}</b> dosya var.`}</div>
+    </div>
+    ${grup('🔴 Acil',acil,'#DC2626','hemen aranmalı / işlem yapılmalı')}
+    ${grup('⚠️ Bugün',bugun,'#D97706','bugün ilgilenilmeli')}
+    ${grup('📞 Yaklaşan',yaklasan,'#2563EB','yakında takip gerekiyor')}
+    ${toplam===0?'<div style="text-align:center;padding:40px;color:var(--text3)">Tüm dosyaların güncel. 👏</div>':''}
+  </div>`;
+}
+
+// Performans / KPI raporu — yönetici için. Oturum süreleri + işlem sayıları.
+let perfFrom='', perfTo='';
+async function renderPerformance(){
+  document.getElementById('main-content').innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">Performans verileri yükleniyor...</div>';
+  // Varsayılan: bu ay
+  if(!perfFrom){
+    const now=new Date();
+    perfFrom=new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);
+    perfTo=now.toISOString().slice(0,10);
+  }
+  let rapor=[];
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getPerformanceReport',dateFrom:perfFrom,dateTo:perfTo,token:CU.token})});
+    const d=await res.json();
+    if(d.error){document.getElementById('main-content').innerHTML='<div style="padding:40px;text-align:center;color:var(--red)">Rapor okunamadı.<br><span style="font-size:11px;color:var(--text3)">user_sessions / audit_log tabloları oluşturulmamış olabilir.</span></div>';return;}
+    rapor=d.report||[];
+  }catch(e){document.getElementById('main-content').innerHTML='<div style="padding:40px;text-align:center;color:var(--red)">Bağlantı hatası.</div>';return;}
+
+  rapor.sort((a,b)=>b.actionCount-a.actionCount);
+  function saatFmt(dk){
+    if(dk===null||dk===undefined)return '—';
+    const s=Math.floor(dk/60), m=dk%60;
+    return s>0?`${s}s ${m}dk`:`${m}dk`;
+  }
+  function girisSaati(dkOfDay){
+    if(dkOfDay===null||dkOfDay===undefined)return '—';
+    const s=Math.floor(dkOfDay/60), m=dkOfDay%60;
+    return String(s).padStart(2,'0')+':'+String(m).padStart(2,'0');
+  }
+  const TIP_KISA={asama_degisikligi:'Aşama',not_ekleme:'Not',arama_kaydi:'Arama',odeme_degisikligi:'Ödeme',fatura_durumu:'Fatura',odeme_kaydi_duzenleme:'Ödeme Düz.',musteri_gideri_duzenleme:'Gider',genel_gider_duzenleme:'Gider',musteri_silme:'Silme',sifre_sifirlama:'Şifre'};
+
+  document.getElementById('main-content').innerHTML=`
+  <div style="margin-bottom:16px;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <span style="font-size:12px;color:var(--text2)">Dönem:</span>
+    <input type="date" class="fi2" value="${perfFrom}" style="padding:6px 8px;font-size:12px" onchange="perfFrom=this.value;renderPerformance()">
+    <span style="color:var(--text3)">–</span>
+    <input type="date" class="fi2" value="${perfTo}" style="padding:6px 8px;font-size:12px" onchange="perfTo=this.value;renderPerformance()">
+    <button class="btn btn-ghost btn-sm" onclick="perfQuick('month')">Bu Ay</button>
+    <button class="btn btn-ghost btn-sm" onclick="perfQuick('week')">Bu Hafta</button>
+    <button class="btn btn-ghost btn-sm" onclick="perfQuick('today')">Bugün</button>
+  </div>
+  <div style="font-size:12px;color:var(--text3);margin-bottom:12px">💡 "Aktif süre" gerçek etkileşime dayalıdır (fare/klavye); sekme açık unutulursa süreye eklenmez.</div>
+  <div class="tbl-wrap" style="overflow-x:auto">
+    <table class="tbl" style="min-width:820px">
+      <thead><tr>
+        <th>Kullanıcı</th><th>Rol</th>
+        <th style="text-align:center">Giriş Sayısı</th>
+        <th style="text-align:center">İlk Giriş</th>
+        <th style="text-align:center">Aktif Süre</th>
+        <th style="text-align:center">Toplam İşlem</th>
+        <th>İşlem Dağılımı</th>
+      </tr></thead>
+      <tbody>
+        ${rapor.length===0?'<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text3)">Bu dönemde veri yok</td></tr>':
+        rapor.map(u=>{
+          const dagilim=Object.entries(u.actionsByType||{}).sort((a,b)=>b[1]-a[1]).map(([t,n])=>`<span style="font-size:10px;background:var(--surface2);border-radius:20px;padding:1px 7px;margin-right:3px;white-space:nowrap">${esc(TIP_KISA[t]||t)}: ${n}</span>`).join('');
+          const aktif=u.loginCount>0;
+          return `<tr style="${!aktif?'opacity:0.5':''}">
+            <td style="font-weight:600">${esc(u.name)}</td>
+            <td style="font-size:11px;color:var(--text2)">${esc(ROLE_LABELS[u.role]||u.role)}</td>
+            <td style="text-align:center">${u.loginCount||'<span style="color:var(--red)">0</span>'}</td>
+            <td style="text-align:center;font-size:12px">${girisSaati(u.firstLoginTime)}</td>
+            <td style="text-align:center;font-weight:600">${saatFmt(u.totalActiveMinutes)}</td>
+            <td style="text-align:center;font-weight:700;color:${u.actionCount>0?'var(--accent)':'var(--red)'}">${u.actionCount}</td>
+            <td>${dagilim||'<span style="font-size:11px;color:var(--text3)">işlem yok</span>'}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+  </div>
+  <div style="margin-top:12px"><button class="btn btn-ghost btn-sm" onclick="exportPerformance()">📥 Excel'e Aktar</button></div>`;
+  window._perfData=rapor;
+}
+
+function perfQuick(tip){
+  const now=new Date();
+  if(tip==='month'){perfFrom=new Date(now.getFullYear(),now.getMonth(),1).toISOString().slice(0,10);perfTo=now.toISOString().slice(0,10);}
+  else if(tip==='week'){const gun=now.getDay()||7;perfFrom=new Date(now.getTime()-(gun-1)*86400000).toISOString().slice(0,10);perfTo=now.toISOString().slice(0,10);}
+  else if(tip==='today'){perfFrom=now.toISOString().slice(0,10);perfTo=perfFrom;}
+  renderPerformance();
+}
+
+function exportPerformance(){
+  const rapor=window._perfData||[];
+  if(!rapor.length){toast('Aktarılacak veri yok','red');return;}
+  const headers=['Kullanıcı','Rol','Giriş Sayısı','İlk Giriş Saati','Aktif Süre (dk)','Toplam İşlem','Aşama Değ.','Not','Arama','Ödeme Değ.','Diğer'];
+  const rows=rapor.map(u=>{
+    const a=u.actionsByType||{};
+    const diger=Object.entries(a).filter(([t])=>!['asama_degisikligi','not_ekleme','arama_kaydi','odeme_degisikligi'].includes(t)).reduce((s,[,n])=>s+n,0);
+    const ilkGiris=u.firstLoginTime!=null?String(Math.floor(u.firstLoginTime/60)).padStart(2,'0')+':'+String(u.firstLoginTime%60).padStart(2,'0'):'—';
+    return [u.name,ROLE_LABELS[u.role]||u.role,u.loginCount,ilkGiris,u.totalActiveMinutes,u.actionCount,a.asama_degisikligi||0,a.not_ekleme||0,a.arama_kaydi||0,a.odeme_degisikligi||0,diger];
+  });
+  const ws=XLSX.utils.aoa_to_sheet([headers,...rows]);
+  ws['!cols']=[{wch:20},{wch:14},{wch:12},{wch:14},{wch:16},{wch:14},{wch:12},{wch:8},{wch:8},{wch:12},{wch:10}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Performans');
+  XLSX.writeFile(wb,`performans-${perfFrom}_${perfTo}.xlsx`);
+  toast('✓ Performans raporu indirildi','green');
+}
 
 async function renderMuhasebe() {
   document.getElementById('main-content').innerHTML = '<div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div>';
