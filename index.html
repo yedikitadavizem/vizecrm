@@ -3709,6 +3709,82 @@ async function changeRole(un,newRole){
     toast('Bağlantı hatası','red');
   }
 }
+async function showAuditLog(){
+  const m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  m.addEventListener('click',e=>{if(e.target===m)m.remove();});
+  m.innerHTML='<div style="background:var(--bg);border-radius:14px;max-width:1000px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)"><div style="padding:40px;text-align:center;color:var(--text3)">Denetim kaydı yükleniyor...</div></div>';
+  document.body.appendChild(m);
+  let logs=[];
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getAuditLog',token:CU.token})});
+    const d=await res.json();
+    if(d.error){m.querySelector('div>div').innerHTML='<div style="padding:40px;text-align:center;color:var(--red)">Denetim kaydı okunamadı.<br><span style="font-size:11px;color:var(--text3)">audit_log tablosu henüz oluşturulmamış olabilir.</span></div>';return;}
+    logs=d.logs||[];
+  }catch(e){m.querySelector('div>div').innerHTML='<div style="padding:40px;text-align:center;color:var(--red)">Bağlantı hatası.</div>';return;}
+
+  const TIP_ETIKET={odeme_degisikligi:'💰 Ödeme Değişikliği',fatura_durumu:'📄 Fatura Durumu',odeme_kaydi_duzenleme:'💵 Ödeme Kaydı Düzenleme',musteri_gideri_duzenleme:'💸 Müşteri Gideri',genel_gider_duzenleme:'🧾 Genel Gider',sifre_sifirlama:'🔑 Şifre Sıfırlama',musteri_silme:'🗑️ Müşteri Silme'};
+  const TIP_RENK={odeme_degisikligi:'#2563EB',fatura_durumu:'#7C3AED',odeme_kaydi_duzenleme:'#059669',musteri_gideri_duzenleme:'#DC2626',genel_gider_duzenleme:'#D97706',sifre_sifirlama:'#DB2777',musteri_silme:'#DC2626'};
+
+  function detayOzet(log){
+    if(!log.detail) return '—';
+    let d; try{ d=JSON.parse(log.detail); }catch(_e){ return esc(log.detail); }
+    if(log.action_type==='odeme_degisikligi') return `${esc(d.musteri||'')}: ₺${(d.eski_odeme||0).toLocaleString('tr-TR')} → ₺${(d.yeni_odeme||0).toLocaleString('tr-TR')}`;
+    if(log.action_type==='fatura_durumu') return d.fatura_kesildi?'Kesildi olarak işaretlendi':'Kesilmedi olarak işaretlendi';
+    if(log.action_type==='musteri_silme') return `${esc(d.full_name||'')} (${esc(d.status||'')}, ₺${(d.prepayment||0).toLocaleString('tr-TR')})`;
+    if(log.action_type==='sifre_sifirlama') return esc(d.hedef_kullanici||'');
+    return Object.entries(d).map(([k,v])=>`${esc(k)}: ${esc(String(v))}`).join(', ');
+  }
+
+  const actors=[...new Set(logs.map(l=>l.actor_name).filter(Boolean))].sort();
+  const types=[...new Set(logs.map(l=>l.action_type).filter(Boolean))].sort();
+
+  function buildRows(list){
+    if(!list.length) return '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text3)">Kayıt bulunamadı</td></tr>';
+    return list.map(l=>`<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:8px 12px;white-space:nowrap;font-size:11px;color:var(--text2)">${fmtDT(l.created_at)}</td>
+      <td style="padding:8px 12px;font-size:12px;font-weight:600">${esc(l.actor_name)}<div style="font-size:9px;color:var(--text3);font-weight:400">${esc(l.actor_role||'')}</div></td>
+      <td style="padding:8px 12px"><span style="font-size:10px;font-weight:700;color:#fff;background:${TIP_RENK[l.action_type]||'#6B7280'};padding:2px 8px;border-radius:20px;white-space:nowrap">${esc(TIP_ETIKET[l.action_type]||l.action_type)}</span></td>
+      <td style="padding:8px 12px;font-size:11px;color:var(--text2)">${detayOzet(l)}</td>
+    </tr>`).join('');
+  }
+
+  function reFilter(){
+    const aF=document.getElementById('al-actor').value;
+    const tF=document.getElementById('al-type').value;
+    const f=logs.filter(l=>(!aF||l.actor_name===aF)&&(!tF||l.action_type===tF));
+    document.getElementById('al-tbody').innerHTML=buildRows(f);
+    document.getElementById('al-count').textContent=f.length+' kayıt';
+  }
+
+  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:1000px;width:100%;max-height:88vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="padding:20px 22px 0;display:flex;justify-content:space-between;align-items:flex-start">
+      <div>
+        <div style="font-size:17px;font-weight:700">📋 Denetim Kaydı</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:3px">Kim, ne zaman, neyi değiştirdi — son 500 kritik işlem · <span id="al-count">${logs.length} kayıt</span></div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="this.closest('div[style*=fixed]').remove()" style="font-size:18px;padding:2px 10px">✕</button>
+    </div>
+    <div style="padding:14px 22px;display:flex;gap:8px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+      <select class="sel" id="al-actor"><option value="">Tüm kullanıcılar</option>${actors.map(a=>`<option>${esc(a)}</option>`).join('')}</select>
+      <select class="sel" id="al-type"><option value="">Tüm işlemler</option>${types.map(t=>`<option value="${esc(t)}">${esc(TIP_ETIKET[t]||t)}</option>`).join('')}</select>
+    </div>
+    <div style="overflow:auto;flex:1">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="background:var(--surface2);position:sticky;top:0">
+          <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2)">Tarih</th>
+          <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2)">Kullanıcı</th>
+          <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2)">İşlem</th>
+          <th style="padding:9px 12px;text-align:left;font-size:11px;font-weight:600;color:var(--text2)">Detay</th>
+        </tr></thead>
+        <tbody id="al-tbody">${buildRows(logs)}</tbody>
+      </table>
+    </div>
+  </div>`;
+  document.getElementById('al-actor').addEventListener('change',reFilter);
+  document.getElementById('al-type').addEventListener('change',reFilter);
+}
+
 async function migratePasswords(){
   try{
     // 1. Adım: durum tespiti (hiçbir değişiklik yapmadan)
@@ -3782,6 +3858,7 @@ async function renderUsers(){
     <div style="font-size:12px;color:var(--text2)">${allUsers.length} kullanıcı · ${mgrs.length} yönetici · ${rest.filter(u=>u.role==='sales').length} satış · ${rest.filter(u=>u.role==='evrak').length} evrak · ${rest.filter(u=>u.role==='randevu').length} randevu</div>
     <div style="display:flex;gap:8px">
       ${CU.superAdmin?`<button class="btn btn-ghost btn-sm" onclick="migratePasswords()">🔐 Şifre Güvenliği</button>`:''}
+      ${CU.role==='management'?`<button class="btn btn-ghost btn-sm" onclick="showAuditLog()">📋 Denetim Kaydı</button>`:''}
       <button class="btn btn-ghost btn-sm" onclick="sendPortalBulkEmails()">📧 Portal Bilgilendirme Maili Gönder</button>
       <button class="btn btn-primary btn-sm" onclick="openAddUserForm()">+ Kullanıcı Ekle</button>
     </div>
