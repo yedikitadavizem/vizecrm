@@ -478,6 +478,10 @@ if (localStorage.getItem('vizecrm_token')) {
 // Local USERS sadece Supabase bağlantısı olmadığında kullanılır
 const USERS=[];
 let CU=null;
+// Süper admin "kullanıcı gibi görüntüle" modundayken, gerçek (süper admin) kimliği burada saklanır.
+// null ise normal moddayız. Bu değişken sayesinde her istek yine GERÇEK token ile gider,
+// ama arayüz görüntülenen kullanıcının deneyimini yansıtır.
+let realCU=null;
 
 const STAGES=['Yeni Kayıt','Sonra Ara','Ulaşılamıyor','İlgileniyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'];
 // SENKRONİZASYON UYARISI: Bu dosyadaki durum (status) listeleri (SCLS, PRESALE_STAGES,
@@ -940,6 +944,10 @@ async function doLogin(){
   await initApp();
 }
 function doLogout(){
+  // Sunucuya çıkış bildir (oturum süresini sonlandırır) — cevabı beklemeden devam et
+  if(CU&&CU.token){
+    try{ fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'logout',token:CU.token})}).catch(()=>{}); }catch(e){}
+  }
   CU=null;
   localStorage.removeItem('vizecrm_token');
   if(idleTimer)clearTimeout(idleTimer);
@@ -3958,6 +3966,57 @@ async function showAuditLog(){
   document.getElementById('al-type').addEventListener('change',reFilter);
 }
 
+// ─── SÜPER ADMIN: KULLANICI GİBİ GÖRÜNTÜLE ───
+// Şifresiz olarak bir kullanıcının deneyimini görür. Gerçek token korunur (istekler
+// yine süper admin olarak gider), ama arayüz o kullanıcının gördüğü gibi görünür.
+async function impersonateUser(un){
+  if(!CU.superAdmin){toast('Bu işlem sadece Süper Admin\'e açık','red');return;}
+  if(realCU){toast('Zaten görüntüleme modundasınız','amber');return;}
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'impersonateUser',username:un,token:CU.token})});
+    const d=await res.json();
+    if(!d.impersonated){toast('Hata: '+(d.error?.message||d.error||'Görüntülenemedi'),'red');return;}
+    // Gerçek kimliği sakla, arayüzü hedef kullanıcıya çevir. TOKEN değişmez (CU.token korunur).
+    realCU=CU;
+    CU={...d.impersonated, token:realCU.token, _impersonated:true};
+    showImpersonationBar();
+    renderNavMenu();
+    document.getElementById('sb-av').textContent=initials(CU.name);
+    document.getElementById('sb-name').textContent=CU.name;
+    document.getElementById('sb-role').textContent=(ROLE_LABELS[CU.role]||CU.role);
+    // Görüntülenen kullanıcının ilk uygun sayfasına git
+    showPage(CU.role==='management'?'dashboard':(CU.role==='sales'?'today':'customers'));
+    toast('👁 '+CU.name+' olarak görüntülüyorsunuz','blue');
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
+function stopImpersonation(){
+  if(!realCU)return;
+  CU=realCU;
+  realCU=null;
+  const bar=document.getElementById('imp-bar');
+  if(bar)bar.remove();
+  document.body.style.paddingTop='';
+  renderNavMenu();
+  document.getElementById('sb-av').textContent=initials(CU.name);
+  document.getElementById('sb-name').textContent=CU.name;
+  document.getElementById('sb-role').textContent=(CU.superAdmin?'⭐ Süper Admin':(ROLE_LABELS[CU.role]||CU.role));
+  showPage('users');
+  toast('✓ Kendi hesabınıza döndünüz','green');
+}
+
+function showImpersonationBar(){
+  let bar=document.getElementById('imp-bar');
+  if(bar)bar.remove();
+  bar=document.createElement('div');
+  bar.id='imp-bar';
+  bar.style.cssText='position:fixed;top:0;left:0;right:0;height:40px;background:linear-gradient(90deg,#7C3AED,#DB2777);color:#fff;z-index:99999;display:flex;align-items:center;justify-content:center;gap:16px;font-size:13px;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.2)';
+  bar.innerHTML='👁 <b>'+esc(CU.name)+'</b> ('+esc(ROLE_LABELS[CU.role]||CU.role)+') olarak görüntülüyorsunuz — değişiklikleriniz bu kullanıcı adına kaydedilir'
+    +'<button onclick="stopImpersonation()" style="background:#fff;color:#7C3AED;border:none;border-radius:6px;padding:5px 14px;font-size:12px;font-weight:700;cursor:pointer">✕ Görüntülemeyi Kapat</button>';
+  document.body.appendChild(bar);
+  document.body.style.paddingTop='40px';
+}
+
 async function migratePasswords(){
   try{
     // 1. Adım: durum tespiti (hiçbir değişiklik yapmadan)
@@ -4055,6 +4114,7 @@ async function renderUsers(){
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         ${(CU.superAdmin&&!isMe&&!isSA)?roleSelect(u):`<span class="badge b-manager">${isSA?'⭐ Süper Admin':'Yönetici'}</span>`}
         ${(isLocked&&CU.superAdmin)?`<button class="btn btn-primary btn-sm" onclick="unlockUser('${u.username}')">🔓 Kilidi Aç</button>`:''}
+        ${(CU.superAdmin&&!isMe)?`<button class="btn btn-ghost btn-sm" style="border:1px solid #A855F7;color:#7C3AED" onclick="impersonateUser('${u.username}')">👁 Görüntüle</button>`:''}
         ${(CU.superAdmin||isMe)?`<button class="btn btn-ghost btn-sm" onclick="openEditUserModal('${u.username}')">👤 Profil</button><button class="btn btn-ghost btn-sm" onclick="editPw('${u.username}')">🔑 Şifre</button>`:'<span style="font-size:11px;color:var(--text3)">Düzenlenemez</span>'}
         ${(CU.superAdmin&&!isMe&&!isSA)?`<button class="btn btn-danger btn-sm" onclick="deleteUser('${u.username}')">🗑 Sil</button>`:''}
       </div>
@@ -4076,6 +4136,7 @@ async function renderUsers(){
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
         ${(CU.role==='management')?roleSelect(u):`<span class="badge ${ROLE_BADGE_CLS[u.role]||'b-ops'}">${ROLE_LABELS[u.role]||u.role}</span>`}
         ${isLocked?`<button class="btn btn-primary btn-sm" onclick="unlockUser('${u.username}')">🔓 Kilidi Aç</button>`:''}
+        ${CU.superAdmin?`<button class="btn btn-ghost btn-sm" style="border:1px solid #A855F7;color:#7C3AED" onclick="impersonateUser('${u.username}')">👁 Görüntüle</button>`:''}
         <button class="btn btn-ghost btn-sm" onclick="openEditUserModal('${u.username}')">👤 Profil</button>
         <button class="btn btn-ghost btn-sm" onclick="editPw('${u.username}')">🔑 Şifre</button>
         <button class="btn btn-amber btn-sm" onclick="resetPw('${u.username}')">🔄 Sıfırla</button>
