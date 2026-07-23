@@ -987,7 +987,7 @@ function renderNavMenu(){
     ${isM?'<button class="nav-item" onclick="showPage(\'completed\')"><span class="nav-icon">✅</span> Tamamlandı'+(completedCount?' <span class="nav-badge">'+completedCount+'</span>':'')+'</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'cancelled\')"><span class="nav-icon">🚫</span> İptal Edilenler'+(cancelledCount?' <span class="nav-badge">'+cancelledCount+'</span>':'')+'</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'notinterested\')"><span class="nav-icon">😐</span> İlgilenmiyor'+(notInterestedCount?' <span class="nav-badge">'+notInterestedCount+'</span>':'')+'</button>':''}
-    ${isM?'<div class="sb-sec">Yönetim</div><button class="nav-item" onclick="showPage(\'muhasebe\')"><span class="nav-icon">💰</span> Muhasebe</button><button class="nav-item" onclick="showPage(\'performance\')"><span class="nav-icon">📊</span> Performans</button><button class="nav-item" onclick="showPage(\'refunds\')"><span class="nav-icon">↩</span> İadeler'+(refundCount?' <span class="nav-badge">'+refundCount+'</span>':'')+'</button><button class="nav-item" onclick="showPage(\'users\')"><span class="nav-icon">🔐</span> Kullanıcılar</button>':''}
+    ${isM?'<div class="sb-sec">Yönetim</div><button class="nav-item" onclick="showPage(\'muhasebe\')"><span class="nav-icon">💰</span> Muhasebe</button><button class="nav-item" onclick="showPage(\'performance\')"><span class="nav-icon">📊</span> Performans</button><button class="nav-item" onclick="showPage(\'instagram\')"><span class="nav-icon">📩</span> Instagram Mesajları'+(window._igPendingCount?' <span class="nav-badge">'+window._igPendingCount+'</span>':'')+'</button><button class="nav-item" onclick="showPage(\'refunds\')"><span class="nav-icon">↩</span> İadeler'+(refundCount?' <span class="nav-badge">'+refundCount+'</span>':'')+'</button><button class="nav-item" onclick="showPage(\'users\')"><span class="nav-icon">🔐</span> Kullanıcılar</button>':''}
   `;
   // Yeniden çizince 'active' sınıfı kaybolur — geri koy
   document.querySelector('[onclick="showPage(\''+aktifSayfa+'\')"]')?.classList.add('active');
@@ -1011,13 +1011,13 @@ async function initApp(){
     <div class="tb-search" id="tb-search-wrap"><span>🔍</span><input placeholder="Müşteri ara..." oninput="gSearch(this.value)"></div>
     <button class="btn btn-primary" onclick="openModal()">+ Yeni Müşteri</button>
   `;
-  const allowedPages=isM?['dashboard','today','customers','pipeline','consulate','completed','cancelled','notinterested','muhasebe','performance','refunds','users','account']:['today','customers','pipeline','sold','account'];
+  const allowedPages=isM?['dashboard','today','customers','pipeline','consulate','completed','cancelled','notinterested','muhasebe','performance','instagram','refunds','users','account']:['today','customers','pipeline','sold','account'];
   const savedPage=localStorage.getItem('vizecrm_lastpage');
   const startPage=(savedPage&&allowedPages.includes(savedPage))?savedPage:(isM?'dashboard':'customers');
   await showPage(startPage);
 }
 
-const PTITLES={dashboard:'Dashboard',today:'Bugün Ne Yapmalıyım',customers:'Müşteriler',pipeline:'Pipeline',sold:'Satışlarım',consulate:'Konsolosluk Takibi',completed:'Tamamlandı',cancelled:'İptal Edilenler',notinterested:'İlgilenmiyor',muhasebe:'Muhasebe',performance:'Performans',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
+const PTITLES={dashboard:'Dashboard',today:'Bugün Ne Yapmalıyım',customers:'Müşteriler',pipeline:'Pipeline',sold:'Satışlarım',consulate:'Konsolosluk Takibi',completed:'Tamamlandı',cancelled:'İptal Edilenler',notinterested:'İlgilenmiyor',muhasebe:'Muhasebe',performance:'Performans',instagram:'Instagram Mesajları',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
 // Sayfa geçişlerinde YARIŞ KORUMASI:
 // showPage async — veri çekerken (await) kullanıcı başka sayfaya tıklarsa iki showPage
 // aynı anda çalışır. Yavaş olan sonra bitip ekranı ezerse, kullanıcı tıklamadığı sayfayı
@@ -1042,7 +1042,7 @@ async function showPage(p){
   if((p==='dashboard'||p==='muhasebe')&&CU.role==='management') await loadAllPayments();
   if(mySeq!==navSeq) return;
   refreshNavBadges(); // veri tazelendi, kenar çubuğu sayaçları da güncellensin
-  await ({dashboard:renderDash,today:renderToday,customers:renderCusts,pipeline:renderPipeline,sold:renderSold,consulate:renderConsulate,completed:renderCompleted,cancelled:renderCancelled,notinterested:renderNotInterested,muhasebe:renderMuhasebe,performance:renderPerformance,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
+  await ({dashboard:renderDash,today:renderToday,customers:renderCusts,pipeline:renderPipeline,sold:renderSold,consulate:renderConsulate,completed:renderCompleted,cancelled:renderCancelled,notinterested:renderNotInterested,muhasebe:renderMuhasebe,performance:renderPerformance,instagram:renderInstagramMessages,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
 }
 function gSearch(q){
   const sq=q.toLowerCase().trim();
@@ -3905,6 +3905,175 @@ function renderRefunds(){
       <tr onclick="openPanel('${c.id}')" style="cursor:pointer"><td><b>${c.name}</b></td><td>${c.country}</td><td style="color:var(--red);font-weight:700">₺${(c.refundAmount||0).toLocaleString('tr-TR')}</td><td>${c.refundReason||'—'}</td><td>${c.refundRequestedBy||c.rep}</td><td>${c.refundDate?fmtDate(c.refundDate):'—'}</td></tr>`).join('')}
     </tbody></table>
   </div>`;
+}
+
+// ═══ INSTAGRAM MESAJLARI ═══
+// Bot ASLA kendisi müşteri kaydı açmaz — sadece konuşur, özetler, "Onay Bekliyor" durumuna
+// düşürür. Gerçek müşteri kaydı sadece burada bir yönetici "Lead'e Dönüştür" dediğinde açılır.
+const IG_STATUS_LABEL={bot_aktif:'🤖 Bot Konuşuyor',ozet_hazir:'⏳ Onay Bekliyor',insan_devraldi:'👤 Sizinle Yazışıyor',lead_donustu:'✅ Lead\'e Dönüştü',reddedildi:'✕ Reddedildi'};
+const IG_STATUS_COLOR={bot_aktif:'#2563EB',ozet_hazir:'#D97706',insan_devraldi:'#7C3AED',lead_donustu:'#059669',reddedildi:'#6B7280'};
+let igConversations=[];
+let igSelectedId=null;
+
+async function renderInstagramMessages(){
+  document.getElementById('main-content').innerHTML=`
+  <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Instagram DM'lerine bot otomatik yanıt verir. Yeterli bilgi (telefon no.) toplanınca konuşmayı özetleyip <b>onayınıza</b> sunar — bot hiçbir zaman kendisi müşteri kaydı açmaz.</div>
+  <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;height:calc(100vh - 190px)">
+    <div class="tbl-wrap" style="display:flex;flex-direction:column;overflow:hidden">
+      <div class="tbl-toolbar"><div class="tbl-label" id="ig-list-count">Yükleniyor...</div></div>
+      <div id="ig-conv-list" style="overflow-y:auto;flex:1"></div>
+    </div>
+    <div class="tbl-wrap" id="ig-detail" style="display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:40px;text-align:center;color:var(--text3)">Soldan bir konuşma seçin</div>
+    </div>
+  </div>`;
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getInstagramConversations',token:CU.token})});
+    const d=await res.json();
+    igConversations=d.conversations||[];
+    window._igPendingCount=igConversations.filter(c=>c.status==='ozet_hazir').length;
+    refreshNavBadges();
+  }catch(e){
+    document.getElementById('ig-conv-list').innerHTML='<div style="padding:20px;color:var(--red);font-size:12px">Yüklenemedi — instagram_conversations tablosu oluşturulmamış olabilir.</div>';
+    document.getElementById('ig-list-count').textContent='Hata';
+    return;
+  }
+  renderIgConvList();
+  if(igSelectedId && igConversations.find(c=>c.id===igSelectedId)) openIgConversation(igSelectedId);
+}
+
+function renderIgConvList(){
+  const listEl=document.getElementById('ig-conv-list');
+  const countEl=document.getElementById('ig-list-count');
+  if(!listEl)return;
+  // Onay bekleyenler en üstte — yöneticinin dikkatini ilk onlar çeksin
+  const sorted=[...igConversations].sort((a,b)=>{
+    if((a.status==='ozet_hazir')!==(b.status==='ozet_hazir')) return a.status==='ozet_hazir'?-1:1;
+    return new Date(b.last_message_at||0)-new Date(a.last_message_at||0);
+  });
+  countEl.textContent=igConversations.length+' konuşma'+(window._igPendingCount?' · '+window._igPendingCount+' onay bekliyor':'');
+  if(!sorted.length){listEl.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Henüz Instagram mesajı yok.</div>';return;}
+  listEl.innerHTML=sorted.map(c=>`
+    <div onclick="openIgConversation('${c.id}')" style="padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;${igSelectedId===c.id?'background:var(--accent-l)':''}" onmouseover="if('${igSelectedId===c.id}'!=='true')this.style.background='var(--surface2)'" onmouseout="if('${igSelectedId===c.id}'!=='true')this.style.background=''">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+        <span style="font-weight:700;font-size:12px">${esc(c.ig_username||c.ig_user_id)}</span>
+        <span style="font-size:9px;font-weight:700;color:${IG_STATUS_COLOR[c.status]||'#6B7280'}">${IG_STATUS_LABEL[c.status]||c.status}</span>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:3px">${c.last_message_at?fmtDT(c.last_message_at):'—'}</div>
+    </div>`).join('');
+}
+
+async function openIgConversation(convId){
+  igSelectedId=convId;
+  renderIgConvList();
+  const c=igConversations.find(x=>x.id===convId);
+  const detail=document.getElementById('ig-detail');
+  if(!c||!detail)return;
+  detail.innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div>';
+  let messages=[];
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getInstagramMessages',customerId:convId,token:CU.token})});
+    const d=await res.json();
+    messages=d.messages||[];
+  }catch(e){}
+
+  const msgsHTML=messages.map(m=>{
+    const isIn=m.direction==='inbound';
+    return `<div style="display:flex;justify-content:${isIn?'flex-start':'flex-end'};margin-bottom:8px">
+      <div style="max-width:70%;padding:8px 12px;border-radius:12px;font-size:12px;background:${isIn?'var(--surface2)':'var(--accent-l)'};color:var(--text)">
+        ${esc(m.message_text||'')}
+        <div style="font-size:9px;color:var(--text3);margin-top:3px">${m.sender_label==='ai_bot'?'🤖 Bot':m.sender_label==='musteri'?'Müşteri':esc(m.sender_label||'')} · ${fmtDT(m.created_at)}</div>
+      </div>
+    </div>`;
+  }).join('');
+
+  detail.innerHTML=`
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <div><div style="font-weight:700;font-size:13px">${esc(c.ig_username||c.ig_user_id)}</div>
+      <div style="font-size:10px;color:${IG_STATUS_COLOR[c.status]||'#6B7280'};font-weight:700;margin-top:2px">${IG_STATUS_LABEL[c.status]||c.status}</div></div>
+    </div>
+    ${c.status==='ozet_hazir'?`
+    <div style="padding:14px 18px;background:var(--amber-bg);border-bottom:1px solid var(--amber)">
+      <div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:6px">🤖 AI Özeti — Onayınızı Bekliyor</div>
+      <div style="font-size:12px;color:var(--text);line-height:1.6;margin-bottom:12px">${esc(c.ai_summary||'')}</div>
+      <button class="btn btn-primary btn-sm" onclick="openConvertIgModal('${c.id}')">✓ Lead'e Dönüştür</button>
+      <button class="btn btn-ghost btn-sm" onclick="rejectIgConversation('${c.id}')">✕ Reddet</button>
+    </div>`:''}
+    <div style="flex:1;overflow-y:auto;padding:14px 18px" id="ig-msg-scroll">${msgsHTML||'<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">Henüz mesaj yok.</div>'}</div>
+    ${c.status!=='lead_donustu'&&c.status!=='reddedildi'?`
+    <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px">
+      <input class="fi2" id="ig-reply-inp" placeholder="Mesaj yaz — gönderince bot bu konuşmada susar..." style="flex:1">
+      <button class="btn btn-primary btn-sm" onclick="sendIgReply('${c.id}')">Gönder</button>
+    </div>`:''}
+  `;
+  const scrollEl=document.getElementById('ig-msg-scroll');
+  if(scrollEl) scrollEl.scrollTop=scrollEl.scrollHeight;
+}
+
+async function sendIgReply(convId){
+  const inp=document.getElementById('ig-reply-inp');
+  const text=(inp?.value||'').trim();
+  if(!text)return;
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sendInstagramMessage',customerId:convId,text,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Gönderilemedi','red');return;}
+    if(inp)inp.value='';
+    await renderInstagramMessages();
+    openIgConversation(convId);
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
+async function rejectIgConversation(convId){
+  if(!confirm('Bu konuşma reddedilecek, lead açılmayacak. Emin misiniz?'))return;
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'rejectInstagramConversation',customerId:convId,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata','red');return;}
+    toast('✕ Konuşma reddedildi','amber');
+    await renderInstagramMessages();
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
+// Onay son adımı: AI'nın topladığı bilgiler burada bir form olarak gösterilir,
+// yönetici gözden geçirip düzeltip "Lead'e Dönüştür"e basar — kör onay yok.
+function openConvertIgModal(convId){
+  const c=igConversations.find(x=>x.id===convId);
+  if(!c)return;
+  const m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:440px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">✓ Lead'e Dönüştür</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">AI özetine göre doldu, kontrol edip düzeltebilirsiniz. Kaydedince round-robin ile bir satış temsilcisine atanır.</div>
+    <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--text2);margin-bottom:14px">${esc(c.ai_summary||'')}</div>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Ad Soyad *</label>
+    <input class="fi2" id="igc-name" style="width:100%;padding:8px;margin-bottom:10px" placeholder="Instagram'daki isimden otomatik dolmaz, girin">
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Telefon *</label>
+    <input class="fi2" id="igc-phone" style="width:100%;padding:8px;margin-bottom:10px" placeholder="+90 5xx xxx xx xx">
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Hedef Ülke</label>
+    <input class="fi2" id="igc-country" style="width:100%;padding:8px;margin-bottom:14px" placeholder="Örn: 🇩🇪 Almanya">
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="this.closest('div[style*=fixed]').remove()">Vazgeç</button>
+      <button class="btn btn-primary" style="flex:1" onclick="confirmConvertIg('${convId}',this)">✓ Onayla ve Ata</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+async function confirmConvertIg(convId, btn){
+  const name=document.getElementById('igc-name')?.value.trim();
+  const phone=document.getElementById('igc-phone')?.value.trim();
+  const country=document.getElementById('igc-country')?.value.trim();
+  if(!name||!phone){toast('Ad ve telefon zorunludur','red');return;}
+  btn.disabled=true;btn.textContent='Kaydediliyor...';
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'convertInstagramToCustomer',customerId:convId,name,phone,country,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Kaydedilemedi'),'red');btn.disabled=false;btn.textContent='✓ Onayla ve Ata';return;}
+    document.querySelector('div[style*=fixed]')?.remove();
+    toast('✓ '+name+' lead\'e dönüştürüldü — '+d.id+' ('+d.assignedTo+'\'a atandı)','green');
+    await renderInstagramMessages();
+  }catch(e){toast('Bağlantı hatası','red');btn.disabled=false;btn.textContent='✓ Onayla ve Ata';}
 }
 
 // USERS
