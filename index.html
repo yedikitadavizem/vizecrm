@@ -4656,7 +4656,7 @@ async function openPanel(id, readonly=false){
   document.getElementById('detail-panel').classList.add('open');
   document.getElementById('panel-body').innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div>';
 
-  let notes=[],calls=[],salesReps=[],docMap={},documents=[],history=[],companions=[],applications=[];
+  let notes=[],calls=[],salesReps=[],evrakReps=[],docMap={},documents=[],history=[],companions=[],applications=[];
   try{
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getCustomerDetail',customerId:id,token:CU.token})});
     const d=await res.json();
@@ -4673,14 +4673,18 @@ async function openPanel(id, readonly=false){
     const d2=await res2.json();
     applications=(d2.applications||[]);
   }catch(e){}
-  if(CU.role==='management' && !window.salesRepCache){
+  // Not: eskiden bu liste window.salesRepCache ile bir kez çekilip oturum boyunca
+  // saklanıyordu. Bu yüzden silinen/pasifleştirilen bir kullanıcı, panel yenilenmeden
+  // dropdown'da görünmeye devam ediyordu. Artık panel her açıldığında taze çekiliyor.
+  if(CU.role==='management'){
     try{
       const res2=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getUsers',token:CU.token})});
       const d2=await res2.json();
-      window.salesRepCache=(d2.users||[]).filter(u=>u.role==='sales');
+      const freshUsers=d2.users||[];
+      salesReps=freshUsers.filter(u=>u.role==='sales');
+      evrakReps=freshUsers.filter(u=>u.role==='evrak');
     }catch(e){}
   }
-  if(window.salesRepCache) salesReps=window.salesRepCache;
   const reached=calls.filter(x=>x.result==='ulasildi').length;
 
   const si=STAGES.indexOf(c.status);
@@ -5081,15 +5085,27 @@ async function openPanel(id, readonly=false){
 
   ${CU.role==='management'?`
   <div class="ps">
-    <div class="ps-head"><div class="ps-title">🔄 Temsilci Değiştir</div></div>
-    <div class="ps-body">
-      <div style="font-size:12px;color:var(--text2);margin-bottom:10px">Bu müşteriyi başka bir satış temsilcisine aktar</div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-        <select class="sel" id="transfer-rep-${c.id}" style="flex:1;min-width:160px">
-          <option value="">Temsilci seç...</option>
-          ${salesReps.map(u=>`<option value="${u.username}">${u.name}</option>`).join('')}
-        </select>
-        <button class="btn btn-primary btn-sm" onclick="transferCustomer('${c.id}')">Aktar →</button>
+    <div class="ps-head"><div class="ps-title">🔄 Personel Transferi</div></div>
+    <div class="ps-body" style="display:flex;flex-direction:column;gap:14px">
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">💼 Satış Temsilcisi</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select class="sel" id="transfer-sales-${c.id}" style="flex:1;min-width:160px">
+            <option value="">Temsilci seç...</option>
+            ${salesReps.map(u=>`<option value="${u.username}">${u.name}</option>`).join('')}
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="transferCustomer('${c.id}','sales')">Aktar →</button>
+        </div>
+      </div>
+      <div>
+        <div style="font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">📄 Evrak Sorumlusu</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+          <select class="sel" id="transfer-evrak-${c.id}" style="flex:1;min-width:160px">
+            <option value="">Personel seç...</option>
+            ${evrakReps.map(u=>`<option value="${u.username}">${u.name}</option>`).join('')}
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="transferCustomer('${c.id}','evrak')">Aktar →</button>
+        </div>
       </div>
     </div>
   </div>
@@ -5218,19 +5234,20 @@ async function removeCompanion(id,companionId){
     toast('🗑 Refakatçi silindi','amber');
   }catch(e){toast('Bağlantı hatası','red');}
 }
-async function transferCustomer(id){
-  const sel = document.getElementById('transfer-rep-'+id);
+async function transferCustomer(id, dept){
+  dept = dept === 'evrak' ? 'evrak' : 'sales';
+  const sel = document.getElementById('transfer-'+dept+'-'+id);
   const newRep = sel?.value;
-  if(!newRep){toast('Lütfen bir temsilci seçin','amber');return;}
+  if(!newRep){toast('Lütfen bir personel seçin','amber');return;}
   try{
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'transferCustomer',customerId:id,newRepUsername:newRep,token:CU.token})});
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'transferCustomer',customerId:id,newRepUsername:newRep,transferDept:dept,token:CU.token})});
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Aktarılamadı'),'red');return;}
     await loadCustomers();
     await openPanel(id);
     if(document.getElementById('cust-tbody'))renderRows();
     if(document.getElementById('kanban'))renderPipeline();
-    toast('✓ Temsilciye aktarıldı','green');
+    toast(dept==='evrak'?'✓ Evrak sorumlusuna aktarıldı':'✓ Temsilciye aktarıldı','green');
   }catch(e){
     toast('Bağlantı hatası','red');
   }
