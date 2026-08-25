@@ -331,21 +331,28 @@ textarea.fi2{resize:vertical}
 .toast-wrap{position:fixed;bottom:24px;right:24px;z-index:1000;display:flex;flex-direction:column;gap:8px}
 
 /* ===== TAKVİM ===== */
-.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-.cal-grid-head{margin-bottom:6px}
-.cal-headcell{font-size:11px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em;text-align:center;padding:4px 0}
-.cal-cell{background:#fff;border:1px solid var(--border);border-radius:9px;min-height:104px;padding:7px;display:flex;flex-direction:column;gap:4px;transition:border-color .12s}
-.cal-cell.cal-empty{background:transparent;border:none}
-.cal-cell:not(.cal-empty):hover{border-color:var(--border2)}
-.cal-cell.cal-today{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent) inset}
-.cal-daynum{font-size:11px;font-weight:700;color:var(--text2)}
-.cal-daynum-today{color:#fff;background:var(--accent);width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center}
+.cal-toolbar{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:18px;padding-bottom:16px;border-bottom:1px solid var(--border)}
+.cal-month-label{font-size:17px;font-weight:800;letter-spacing:-.3px;min-width:150px;text-align:center;color:var(--text)}
+.cal-legend{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2);font-weight:500}
+.cal-legend-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.cal-legend-ready{background:var(--green)}
+.cal-legend-pending{background:var(--amber)}
+.cal-count{font-size:12px;color:var(--text2);font-weight:600;background:var(--surface2);padding:4px 10px;border-radius:20px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
+.cal-cell{background:#fff;border:1px solid var(--border);border-radius:10px;min-height:106px;padding:8px;display:flex;flex-direction:column;gap:5px;transition:box-shadow .15s,border-color .15s}
+.cal-cell:hover{border-color:var(--border2);box-shadow:0 2px 10px rgba(15,23,42,.06)}
+.cal-cell.cal-has-appt{background:linear-gradient(180deg,#FAFBFF 0%,#fff 40%)}
+.cal-cell.cal-today{border-color:var(--accent);box-shadow:0 0 0 1.5px var(--accent) inset}
+.cal-daynum{font-size:12px;font-weight:700;color:var(--text2)}
+.cal-daynum-today{color:#fff;background:var(--accent);width:21px;height:21px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(37,99,235,.35)}
 .cal-appts{display:flex;flex-direction:column;gap:3px;overflow:hidden}
-.cal-appt-chip{font-size:10px;background:var(--accent-l);color:var(--accent);padding:2px 6px;border-radius:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;font-weight:600}
-.cal-appt-chip:hover{background:#DBEAFE}
-.cal-more{font-size:10px;color:var(--text3);cursor:pointer;padding:1px 6px;font-weight:600}
+.cal-appt-chip{font-size:10px;padding:3px 7px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;font-weight:600;border-left:2.5px solid transparent;transition:transform .1s,filter .1s}
+.cal-appt-chip:hover{transform:translateX(1px);filter:brightness(0.97)}
+.cal-chip-ready{background:var(--green-bg);color:var(--green);border-left-color:var(--green)}
+.cal-chip-pending{background:var(--amber-bg);color:var(--amber);border-left-color:var(--amber)}
+.cal-more{font-size:10px;color:var(--text3);cursor:pointer;padding:1px 7px;font-weight:700}
 .cal-more:hover{text-decoration:underline;color:var(--accent)}
-@media(max-width:900px){.cal-cell{min-height:68px;padding:5px}.cal-appt-chip{font-size:9px}}
+@media(max-width:900px){.cal-grid{gap:5px}.cal-cell{min-height:68px;padding:5px}.cal-appt-chip{font-size:9px;padding:2px 5px}.cal-month-label{min-width:auto}}
 
 @media(max-width:900px){.stats-grid,.stats-grid-5{grid-template-columns:repeat(2,1fr)}.charts-grid{grid-template-columns:1fr}}
 </style>
@@ -2248,6 +2255,10 @@ function calGoToday(){
   drawCalendar();
 }
 
+// Randevu evrakları hazırlanmış mı? (Randevu Evrakları Tamamlandı ve sonrası aşamalar)
+const CAL_DOCS_READY_STAGES=['Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı'];
+function apptDocsReady(c){ return CAL_DOCS_READY_STAGES.includes(c.status); }
+
 function drawCalendar(){
   // Bu ay içindeki randevuları güne göre grupla
   const apptsByDay={};
@@ -2263,22 +2274,22 @@ function drawCalendar(){
   });
   Object.values(apptsByDay).forEach(list=>list.sort((a,b)=>(a.apptTime||'').localeCompare(b.apptTime||'')));
 
-  const firstOfMonth=new Date(calYear,calMonth,1);
-  let startDow=firstOfMonth.getDay(); // 0=Paz
-  startDow=startDow===0?6:startDow-1; // Pzt=0 olacak şekilde çevir
   const daysInMonth=new Date(calYear,calMonth+1,0).getDate();
   const todayStr=getTodayStr();
 
+  // Boş baştan hücre yok — ay her zaman 1. günden, grid'in ilk kutucuğundan başlar.
   let cells='';
-  for(let i=0;i<startDow;i++)cells+='<div class="cal-cell cal-empty"></div>';
   for(let day=1;day<=daysInMonth;day++){
     const dateStr=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
     const isToday=dateStr===todayStr;
     const appts=apptsByDay[day]||[];
-    cells+=`<div class="cal-cell ${isToday?'cal-today':''}">
+    cells+=`<div class="cal-cell ${isToday?'cal-today':''} ${appts.length?'cal-has-appt':''}">
       <div class="cal-daynum ${isToday?'cal-daynum-today':''}">${day}</div>
       <div class="cal-appts">
-        ${appts.slice(0,3).map(c=>`<div class="cal-appt-chip" onclick="openPanel('${c.id}')" title="${esc(c.name)} — ${esc(c.country||'')}${c.apptCenter?' — '+esc(c.apptCenter):''}">${c.apptTime?c.apptTime+' ':''}${esc(c.name)}</div>`).join('')}
+        ${appts.slice(0,3).map(c=>{
+          const ready=apptDocsReady(c);
+          return `<div class="cal-appt-chip ${ready?'cal-chip-ready':'cal-chip-pending'}" onclick="openPanel('${c.id}')" title="${esc(c.name)} — ${esc(c.country||'')}${c.apptCenter?' — '+esc(c.apptCenter):''} — ${ready?'Evraklar hazır':'Evrak bekleniyor'}">${ready?'✓ ':''}${c.apptTime?c.apptTime+' ':''}${esc(c.name)}</div>`;
+        }).join('')}
         ${appts.length>3?`<div class="cal-more" onclick="showCalDayModal('${dateStr}')">+${appts.length-3} daha</div>`:''}
       </div>
     </div>`;
@@ -2287,16 +2298,19 @@ function drawCalendar(){
   const totalThisMonth=Object.values(apptsByDay).reduce((s,a)=>s+a.length,0);
 
   document.getElementById('cal-wrap').innerHTML=`
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px">
-      <div style="display:flex;align-items:center;gap:10px">
+    <div class="cal-toolbar">
+      <div style="display:flex;align-items:center;gap:8px">
         <button class="btn btn-ghost btn-sm" onclick="calNav(-1)">←</button>
-        <div style="font-size:16px;font-weight:700;min-width:150px;text-align:center">${CAL_MONTHS_TR[calMonth]} ${calYear}</div>
+        <div class="cal-month-label">${CAL_MONTHS_TR[calMonth]} ${calYear}</div>
         <button class="btn btn-ghost btn-sm" onclick="calNav(1)">→</button>
         <button class="btn btn-ghost btn-sm" onclick="calGoToday()">Bugün</button>
       </div>
-      <div style="font-size:12px;color:var(--text2)">${totalThisMonth} randevu bu ay</div>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div class="cal-legend"><span class="cal-legend-dot cal-legend-ready"></span>Evraklar hazır</div>
+        <div class="cal-legend"><span class="cal-legend-dot cal-legend-pending"></span>Evrak bekleniyor</div>
+        <div class="cal-count">${totalThisMonth} randevu bu ay</div>
+      </div>
     </div>
-    <div class="cal-grid cal-grid-head">${CAL_DAYS_TR.map(d=>`<div class="cal-headcell">${d}</div>`).join('')}</div>
     <div class="cal-grid">${cells}</div>`;
 }
 
@@ -2311,15 +2325,18 @@ function showCalDayModal(dateStr){
       <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>
     </div>
     <div style="padding:8px">
-      ${list.map(c=>`
-      <div onclick="this.closest('div[style*=fixed]').remove();openPanel('${c.id}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      ${list.map(c=>{
+        const ready=apptDocsReady(c);
+        return `
+      <div onclick="this.closest('div[style*=fixed]').remove();openPanel('${c.id}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;cursor:pointer;border-left:3px solid ${ready?'var(--green)':'var(--amber)'}" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
         <div style="width:50px;text-align:center;font-size:13px;font-weight:700;color:var(--accent)">${c.apptTime||'—'}</div>
         <div style="flex:1">
           <div style="font-weight:600;font-size:13px">${esc(c.name)}</div>
           <div style="font-size:11px;color:var(--text2)">${c.country||'—'}${c.apptCenter?' · '+esc(c.apptCenter):''}</div>
         </div>
+        <span style="font-size:10px;font-weight:700;color:${ready?'var(--green)':'var(--amber)'}">${ready?'✓ Evraklar hazır':'⏳ Evrak bekleniyor'}</span>
         <span class="badge ${SCLS[c.status]||'b-lead'}" style="font-size:10px">${c.status}</span>
-      </div>`).join('')}
+      </div>`;}).join('')}
       ${list.length===0?'<div style="padding:24px;text-align:center;color:var(--text3)">Randevu yok</div>':''}
     </div>
   </div>`;
