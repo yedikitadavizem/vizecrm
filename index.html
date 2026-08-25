@@ -343,7 +343,9 @@ textarea.fi2{resize:vertical}
 .cal-cell:hover{border-color:var(--border2);box-shadow:0 2px 10px rgba(15,23,42,.06)}
 .cal-cell.cal-has-appt{background:linear-gradient(180deg,#FAFBFF 0%,#fff 40%)}
 .cal-cell.cal-today{border-color:var(--accent);box-shadow:0 0 0 1.5px var(--accent) inset}
+.cal-daynum-row{display:flex;align-items:center;justify-content:space-between}
 .cal-daynum{font-size:12px;font-weight:700;color:var(--text2)}
+.cal-dowlabel{font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
 .cal-daynum-today{color:#fff;background:var(--accent);width:21px;height:21px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(37,99,235,.35)}
 .cal-appts{display:flex;flex-direction:column;gap:3px;overflow:hidden}
 .cal-appt-chip{font-size:10px;padding:3px 7px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;font-weight:600;border-left:2.5px solid transparent;transition:transform .1s,filter .1s}
@@ -2278,13 +2280,19 @@ function drawCalendar(){
   const todayStr=getTodayStr();
 
   // Boş baştan hücre yok — ay her zaman 1. günden, grid'in ilk kutucuğundan başlar.
+  // Sütun başlığı yerine her kutucuk KENDİ gerçek gün adını gösterir (hizalama yanıltmasın diye).
   let cells='';
   for(let day=1;day<=daysInMonth;day++){
     const dateStr=calYear+'-'+String(calMonth+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
     const isToday=dateStr===todayStr;
     const appts=apptsByDay[day]||[];
+    const dow=new Date(calYear,calMonth,day).getDay(); // 0=Paz
+    const dowLabel=CAL_DAYS_TR[dow===0?6:dow-1];
     cells+=`<div class="cal-cell ${isToday?'cal-today':''} ${appts.length?'cal-has-appt':''}">
-      <div class="cal-daynum ${isToday?'cal-daynum-today':''}">${day}</div>
+      <div class="cal-daynum-row">
+        <div class="cal-daynum ${isToday?'cal-daynum-today':''}">${day}</div>
+        <div class="cal-dowlabel">${dowLabel}</div>
+      </div>
       <div class="cal-appts">
         ${appts.slice(0,3).map(c=>{
           const ready=apptDocsReady(c);
