@@ -985,6 +985,8 @@ function doLogout(){
   CU=null;
   localStorage.removeItem('vizecrm_token');
   if(idleTimer)clearTimeout(idleTimer);
+  if(mealWarningInterval){clearInterval(mealWarningInterval);mealWarningInterval=null;}
+  hideMealWarning();
   document.getElementById('app').style.display='none';
   document.getElementById('login-screen').style.display='flex';
   document.getElementById('lu').value='';
@@ -1014,7 +1016,7 @@ function renderNavMenu(){
     ${isM?'<button class="nav-item" onclick="showPage(\'completed\')"><span class="nav-icon">✅</span> Tamamlandı'+(completedCount?' <span class="nav-badge">'+completedCount+'</span>':'')+'</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'cancelled\')"><span class="nav-icon">🚫</span> İptal Edilenler'+(cancelledCount?' <span class="nav-badge">'+cancelledCount+'</span>':'')+'</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'notinterested\')"><span class="nav-icon">😐</span> İlgilenmiyor'+(notInterestedCount?' <span class="nav-badge">'+notInterestedCount+'</span>':'')+'</button>':''}
-    ${isM?'<div class="sb-sec">Yönetim</div><button class="nav-item" onclick="showPage(\'muhasebe\')"><span class="nav-icon">💰</span> Muhasebe</button><button class="nav-item" onclick="showPage(\'performance\')"><span class="nav-icon">📊</span> Performans</button><button class="nav-item" onclick="showPage(\'instagram\')"><span class="nav-icon">📩</span> Instagram Mesajları'+(window._igPendingCount?' <span class="nav-badge">'+window._igPendingCount+'</span>':'')+'</button><button class="nav-item" onclick="showPage(\'refunds\')"><span class="nav-icon">↩</span> İadeler'+(refundCount?' <span class="nav-badge">'+refundCount+'</span>':'')+'</button><button class="nav-item" onclick="showPage(\'users\')"><span class="nav-icon">🔐</span> Kullanıcılar</button>':''}
+    ${isM?'<div class="sb-sec">Yönetim</div><button class="nav-item" onclick="showPage(\'muhasebe\')"><span class="nav-icon">💰</span> Muhasebe</button><button class="nav-item" onclick="showPage(\'performance\')"><span class="nav-icon">📊</span> Performans</button><button class="nav-item" onclick="showPage(\'refunds\')"><span class="nav-icon">↩</span> İadeler'+(refundCount?' <span class="nav-badge">'+refundCount+'</span>':'')+'</button><button class="nav-item" onclick="showPage(\'users\')"><span class="nav-icon">🔐</span> Kullanıcılar</button>':''}
   `;
   // Yeniden çizince 'active' sınıfı kaybolur — geri koy
   document.querySelector('[onclick="showPage(\''+aktifSayfa+'\')"]')?.classList.add('active');
@@ -1038,13 +1040,79 @@ async function initApp(){
     <div class="tb-search" id="tb-search-wrap"><span>🔍</span><input placeholder="Müşteri ara..." oninput="gSearch(this.value)"></div>
     <button class="btn btn-primary" onclick="openModal()">+ Yeni Müşteri</button>
   `;
-  const allowedPages=isM?['dashboard','today','customers','pipeline','calendar','consulate','completed','cancelled','notinterested','muhasebe','performance','instagram','refunds','users','account']:['today','customers','pipeline','calendar','sold','account'];
+  const allowedPages=isM?['dashboard','today','customers','pipeline','calendar','consulate','completed','cancelled','notinterested','muhasebe','performance','refunds','users','account']:['today','customers','pipeline','calendar','sold','account'];
   const savedPage=localStorage.getItem('vizecrm_lastpage');
   const startPage=(savedPage&&allowedPages.includes(savedPage))?savedPage:(isM?'dashboard':'customers');
   await showPage(startPage);
+
+  // Yemek gideri uyarı sistemi — sadece evrak ve yönetici için. Girişte bir kez kontrol
+  // edilir, sonrasında 30 dakikada bir tekrar kontrol edilir (bkz. checkMealWarning).
+  if(CU.role==='management'||CU.role==='evrak'){
+    checkMealWarning();
+    if(mealWarningInterval)clearInterval(mealWarningInterval);
+    mealWarningInterval=setInterval(checkMealWarning, 30*60*1000);
+  }
 }
 
-const PTITLES={dashboard:'Dashboard',today:'Bugün Ne Yapmalıyım',customers:'Müşteriler',pipeline:'Pipeline',calendar:'Takvim',sold:'Satışlarım',consulate:'Konsolosluk Takibi',completed:'Tamamlandı',cancelled:'İptal Edilenler',notinterested:'İlgilenmiyor',muhasebe:'Muhasebe',performance:'Performans',instagram:'Instagram Mesajları',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
+// ══ YEMEK GİDERİ UYARI SİSTEMİ ══
+// Kural: Saat 15:00'tan (öğleden sonra, çünkü öncesinde henüz yemek yenmez) itibaren,
+// Pazar günleri HARİÇ, o gün için "Yemek" kategorisinde hiç gider girilmemişse evrak ve
+// yönetici ekranlarında büyük, göz ardı edilemeyecek bir uyarı banner'ı gösterilir.
+// Kapatılsa bile 30 dakikada bir tekrar kontrol edilip hâlâ eklenmemişse yeniden çıkar.
+let mealWarningInterval=null;
+
+async function checkMealWarning(){
+  if(!CU||(CU.role!=='management'&&CU.role!=='evrak'))return;
+  const now=new Date();
+  const dow=now.getDay(); // 0 = Pazar
+  if(dow===0){ hideMealWarning(); return; } // Pazar günleri kesinlikle sayılmaz
+  if(now.getHours()<15){ hideMealWarning(); return; } // 15:00'tan önce hiç kontrol edilmez
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getMealExpenseStatus',token:CU.token})});
+    const d=await res.json();
+    if(d.added){ hideMealWarning(); }
+    else{ showMealWarning(); }
+  }catch(e){ /* bağlantı sorununda sessiz geç, bir sonraki kontrolde tekrar dener */ }
+}
+
+function showMealWarning(){
+  if(document.getElementById('meal-warning-banner'))return; // zaten gösteriliyor
+  const b=document.createElement('div');
+  b.id='meal-warning-banner';
+  b.style.cssText='position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:20000;background:linear-gradient(135deg,#DC2626,#B91C1C);color:#fff;padding:14px 18px 14px 20px;border-radius:14px;box-shadow:0 12px 34px rgba(220,38,38,.4);display:flex;align-items:center;gap:14px;font-size:13px;font-weight:700;max-width:92vw;animation:mealPulse 2s infinite';
+  b.innerHTML=`<span style="font-size:20px">🍽️</span>
+    <span>Bugün için <u>Yemek</u> gideri henüz eklenmedi!</span>
+    <button onclick="goAddMealExpense()" style="background:#fff;color:#B91C1C;border:none;border-radius:8px;padding:7px 14px;font-size:12px;font-weight:800;cursor:pointer;white-space:nowrap">+ Gider Ekle</button>
+    <button onclick="hideMealWarning()" title="Kapat (30 dakika sonra hâlâ eklenmemişse tekrar çıkar)" style="background:rgba(255,255,255,.22);border:none;color:#fff;border-radius:8px;padding:7px 11px;font-size:13px;cursor:pointer;font-weight:700">✕</button>`;
+  document.body.appendChild(b);
+  if(!document.getElementById('meal-pulse-style')){
+    const st=document.createElement('style');
+    st.id='meal-pulse-style';
+    st.textContent='@keyframes mealPulse{0%,100%{box-shadow:0 12px 34px rgba(220,38,38,.4)}50%{box-shadow:0 12px 40px rgba(220,38,38,.65)}}';
+    document.head.appendChild(st);
+  }
+}
+
+function hideMealWarning(){
+  const b=document.getElementById('meal-warning-banner');
+  if(b)b.remove();
+}
+
+function goAddMealExpense(){
+  hideMealWarning();
+  showPage('muhasebe').then(()=>{
+    setTimeout(()=>{
+      openAddExpenseModal();
+      // Modal açılınca kategori seçimini otomatik "Yemek" yap
+      setTimeout(()=>{
+        const sel=document.getElementById('exp-cat');
+        if(sel){ sel.value='Yemek'; }
+      },50);
+    },250);
+  });
+}
+
+const PTITLES={dashboard:'Dashboard',today:'Bugün Ne Yapmalıyım',customers:'Müşteriler',pipeline:'Pipeline',calendar:'Takvim',sold:'Satışlarım',consulate:'Konsolosluk Takibi',completed:'Tamamlandı',cancelled:'İptal Edilenler',notinterested:'İlgilenmiyor',muhasebe:'Muhasebe',performance:'Performans',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
 // Sayfa geçişlerinde YARIŞ KORUMASI:
 // showPage async — veri çekerken (await) kullanıcı başka sayfaya tıklarsa iki showPage
 // aynı anda çalışır. Yavaş olan sonra bitip ekranı ezerse, kullanıcı tıklamadığı sayfayı
@@ -1069,7 +1137,7 @@ async function showPage(p){
   if((p==='dashboard'||p==='muhasebe')&&CU.role==='management') await loadAllPayments();
   if(mySeq!==navSeq) return;
   refreshNavBadges(); // veri tazelendi, kenar çubuğu sayaçları da güncellensin
-  await ({dashboard:renderDash,today:renderToday,customers:renderCusts,pipeline:renderPipeline,calendar:renderCalendar,sold:renderSold,consulate:renderConsulate,completed:renderCompleted,cancelled:renderCancelled,notinterested:renderNotInterested,muhasebe:renderMuhasebe,performance:renderPerformance,instagram:renderInstagramMessages,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
+  await ({dashboard:renderDash,today:renderToday,customers:renderCusts,pipeline:renderPipeline,calendar:renderCalendar,sold:renderSold,consulate:renderConsulate,completed:renderCompleted,cancelled:renderCancelled,notinterested:renderNotInterested,muhasebe:renderMuhasebe,performance:renderPerformance,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
 }
 function gSearch(q){
   const sq=q.toLowerCase().trim();
@@ -2669,7 +2737,7 @@ function renderNotInterested(){
 // ===== MUHASEBE =====
 let expenses = [];
 let allPayments = [];
-const EXP_CATS = ['Kira','Maas','Ofis','Reklam','Ulasim','Diger'];
+const EXP_CATS = ['Kira','Maas','Ofis','Reklam','Ulasim','Yemek','Diger'];
 
 // "Bugün Ne Yapmalıyım" — kişiye özel, önceliklendirilmiş aksiyon listesi.
 function renderToday(){
@@ -3496,7 +3564,9 @@ function showCustExpDetail(){
 function editExpense(id){
   const e=expenses.find(x=>String(x.id)===String(id));
   if(!e){toast('Gider bulunamadı','red');return;}
-  const cats=['Kira','Maas','Ofis','Reklam','Ulasim','Diger'];
+  const cats=['Kira','Maas','Ofis','Reklam','Ulasim','Yemek','Diger'];
+  const curCat=e.category||'Diger';
+  const catInList=cats.includes(curCat);
   const m=document.createElement('div');
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
   m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
@@ -3504,9 +3574,10 @@ function editExpense(id){
     <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Tarih</label>
     <input type="date" id="ee-date" class="fi2" value="${e.date||''}" style="width:100%;padding:9px;margin-bottom:10px">
     <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Kategori</label>
-    <select id="ee-cat" class="sel" style="width:100%;padding:9px;margin-bottom:10px">
-      ${cats.map(c=>`<option ${e.category===c?'selected':''}>${c}</option>`).join('')}
+    <select id="ee-cat" class="sel" style="width:100%;padding:9px;margin-bottom:6px" onchange="document.getElementById('ee-manual').style.display=this.value==='Diger'?'block':'none'">
+      ${cats.map(c=>`<option ${(catInList?curCat:'Diger')===c?'selected':''}>${c}</option>`).join('')}
     </select>
+    <input type="text" id="ee-manual" class="fi2" placeholder="Kategori adını yaz..." value="${catInList?'':esc(curCat)}" style="width:100%;padding:9px;margin-bottom:10px;display:${catInList?'none':'block'}">
     <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Tutar (₺)</label>
     <input type="number" id="ee-amt" class="fi2" value="${e.amount||0}" min="1" style="width:100%;padding:9px;margin-bottom:10px">
     <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Açıklama</label>
@@ -3524,7 +3595,9 @@ function editExpense(id){
 
 async function saveExpenseEdit(id){
   const expDate=document.getElementById('ee-date')?.value;
-  const expCategory=document.getElementById('ee-cat')?.value;
+  const catSel=document.getElementById('ee-cat')?.value;
+  const manualCat=(document.getElementById('ee-manual')?.value||'').trim();
+  const expCategory=(catSel==='Diger'&&manualCat)?manualCat:catSel;
   const expAmount=parseFloat(document.getElementById('ee-amt')?.value);
   const expDescription=(document.getElementById('ee-desc')?.value||'').trim();
   if(!expDate){toast('Tarih seçiniz','red');return;}
@@ -3545,6 +3618,8 @@ function editCustExpense(id){
   if(!e){toast('Gider bulunamadı','red');return;}
   const c=customers.find(x=>x.id===e.customer_file_number);
   const curDate=e.expense_date||(e.created_at||'').slice(0,10);
+  const curCat=e.category||'Diğer';
+  const catInList=CUST_EXP_CATS.includes(curCat);
   const m=document.createElement('div');
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
   m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
@@ -3553,9 +3628,10 @@ function editCustExpense(id){
     <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Tarih</label>
     <input type="date" id="ce-date" class="fi2" value="${curDate}" style="width:100%;padding:9px;margin-bottom:10px">
     <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Kategori</label>
-    <select id="ce-cat" class="sel" style="width:100%;padding:9px;margin-bottom:10px">
-      ${CUST_EXP_CATS.map(x=>`<option ${(e.category||'Diğer')===x?'selected':''}>${x}</option>`).join('')}
+    <select id="ce-cat" class="sel" style="width:100%;padding:9px;margin-bottom:6px" onchange="document.getElementById('ce-manual').style.display=this.value==='Diğer'?'block':'none'">
+      ${CUST_EXP_CATS.map(x=>`<option ${(catInList?curCat:'Diğer')===x?'selected':''}>${x}</option>`).join('')}
     </select>
+    <input type="text" id="ce-manual" class="fi2" placeholder="Kategori adını yaz..." value="${catInList?'':esc(curCat)}" style="width:100%;padding:9px;margin-bottom:10px;display:${catInList?'none':'block'}">
     <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Tutar (₺)</label>
     <input type="number" id="ce-amt" class="fi2" value="${e.amount||0}" min="1" style="width:100%;padding:9px;margin-bottom:10px">
     <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Açıklama</label>
@@ -3573,7 +3649,9 @@ function editCustExpense(id){
 
 async function saveCustExpenseEdit(id){
   const custExpDate=document.getElementById('ce-date')?.value;
-  const custExpCategory=document.getElementById('ce-cat')?.value;
+  const catSel=document.getElementById('ce-cat')?.value;
+  const manualCat=(document.getElementById('ce-manual')?.value||'').trim();
+  const custExpCategory=(catSel==='Diğer'&&manualCat)?manualCat:catSel;
   const custExpAmount=parseFloat(document.getElementById('ce-amt')?.value);
   const custExpDesc=(document.getElementById('ce-desc')?.value||'').trim();
   if(!custExpDate){toast('Tarih seçiniz','red');return;}
@@ -3849,8 +3927,8 @@ function openMuhDetailModal(type, value) {
 
 
 // Müşteri gideri kategorileri — backend'deki CUSTOMER_EXPENSE_CATEGORIES ile AYNI olmalı
-const CUST_EXP_CATS = ['Konsolosluk Harcı','Kargo','Tercüme','Sigorta','VIP Randevu','Diğer'];
-const CUST_EXP_CAT_COLOR = {'Konsolosluk Harcı':'#DC2626','Kargo':'#D97706','Tercüme':'#7C3AED','Sigorta':'#2563EB','VIP Randevu':'#059669','Diğer':'#6B7280'};
+const CUST_EXP_CATS = ['Konsolosluk Harcı','Randevu Ücreti','Kargo','Tercüme','Sigorta','VIP Randevu','Diğer'];
+const CUST_EXP_CAT_COLOR = {'Konsolosluk Harcı':'#DC2626','Randevu Ücreti':'#0891B2','Kargo':'#D97706','Tercüme':'#7C3AED','Sigorta':'#2563EB','VIP Randevu':'#059669','Diğer':'#6B7280'};
 
 function renderCustExpPanel(custId, exps, readOnly) {
   var total = exps.reduce(function(s,e){ return s+Number(e.amount||0); }, 0);
@@ -3871,11 +3949,12 @@ function renderCustExpPanel(custId, exps, readOnly) {
       }).join('');
   var todayStr = new Date().toISOString().slice(0,10);
   var addForm = !readOnly
-    ? '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'
+    ? '<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center">'
         +'<input type="date" id="cexp-date-'+custId+'" class="fi2" value="'+todayStr+'" style="padding:5px 8px;font-size:12px" title="Giderin gerçekte hangi tarihte olduğu">'
-        +'<select id="cexp-cat-'+custId+'" class="sel" style="padding:5px 8px;font-size:12px">'
+        +'<select id="cexp-cat-'+custId+'" class="sel" style="padding:5px 8px;font-size:12px" onchange="document.getElementById(\'cexp-manual-'+custId+'\').style.display=this.value===\'Diğer\'?\'inline-block\':\'none\'">'
           +CUST_EXP_CATS.map(function(c){return '<option>'+c+'</option>';}).join('')
         +'</select>'
+        +'<input type="text" id="cexp-manual-'+custId+'" class="fi2" placeholder="Kategori adını yaz..." style="padding:5px 8px;font-size:12px;width:130px;display:none">'
         +'<input type="number" id="cexp-amt-'+custId+'" class="fi2" placeholder="Tutar ₺" style="padding:5px 8px;width:90px;font-size:12px" min="1">'
         +'<input type="text" id="cexp-desc-'+custId+'" class="fi2" placeholder="Açıklama (isteğe bağlı)" style="padding:5px 8px;flex:1;font-size:12px;min-width:120px">'
         +'<button class="btn btn-danger btn-sm" onclick="addCustExpense(\''+custId+'\')">+ Gider Ekle</button>'
@@ -3891,7 +3970,10 @@ function renderCustExpPanel(custId, exps, readOnly) {
 
 async function addCustExpense(custId) {
   var expDate = document.getElementById('cexp-date-'+custId)?.value || new Date().toISOString().slice(0,10);
-  var cat = document.getElementById('cexp-cat-'+custId)?.value || 'Diğer';
+  var catSel = document.getElementById('cexp-cat-'+custId)?.value || 'Diğer';
+  var manualCat = (document.getElementById('cexp-manual-'+custId)?.value||'').trim();
+  // "Diğer" seçiliyken manuel kategori adı yazıldıysa, o adı kategori olarak kullan.
+  var cat = (catSel==='Diğer' && manualCat) ? manualCat : catSel;
   var amt = parseFloat(document.getElementById('cexp-amt-'+custId)?.value);
   var desc = (document.getElementById('cexp-desc-'+custId)?.value||'').trim();
   if(!amt||amt<=0){toast('Tutar giriniz','red');return;}
@@ -3930,9 +4012,10 @@ function openAddExpenseModal() {
         </div>
         <div>
           <label style="font-size:12px;color:var(--text2);font-weight:500;display:block;margin-bottom:4px">Kategori</label>
-          <select id="exp-cat" class="sel" style="width:100%;padding:8px 10px">
-            ${['Kira','Maas','Ofis','Reklam','Ulasim','Diger'].map(c=>`<option>${c}</option>`).join('')}
+          <select id="exp-cat" class="sel" style="width:100%;padding:8px 10px" onchange="document.getElementById('exp-cat-manual').style.display=this.value==='Diger'?'block':'none'">
+            ${['Kira','Maas','Ofis','Reklam','Ulasim','Yemek','Diger'].map(c=>`<option>${c}</option>`).join('')}
           </select>
+          <input type="text" id="exp-cat-manual" class="fi2" placeholder="Kategori adını yaz..." style="width:100%;padding:8px 10px;margin-top:6px;display:none">
         </div>
         <div>
           <label style="font-size:12px;color:var(--text2);font-weight:500;display:block;margin-bottom:4px">Tutar (₺) *</label>
@@ -3953,7 +4036,9 @@ function openAddExpenseModal() {
 
 async function saveExpense(btn) {
   const expDate = document.getElementById('exp-date').value;
-  const expCategory = document.getElementById('exp-cat').value;
+  const catSel = document.getElementById('exp-cat').value;
+  const manualCat = (document.getElementById('exp-cat-manual')?.value||'').trim();
+  const expCategory = (catSel==='Diger'&&manualCat) ? manualCat : catSel;
   const expAmount = parseFloat(document.getElementById('exp-amount').value);
   const expDescription = document.getElementById('exp-desc').value.trim();
   if (!expDate || !expAmount || expAmount <= 0) { toast('Tarih ve tutar zorunludur', 'red'); return; }
@@ -4053,175 +4138,6 @@ function renderRefunds(){
       <tr onclick="openPanel('${c.id}')" style="cursor:pointer"><td><b>${c.name}</b></td><td>${c.country}</td><td style="color:var(--red);font-weight:700">₺${(c.refundAmount||0).toLocaleString('tr-TR')}</td><td>${c.refundReason||'—'}</td><td>${c.refundRequestedBy||c.rep}</td><td>${c.refundDate?fmtDate(c.refundDate):'—'}</td></tr>`).join('')}
     </tbody></table>
   </div>`;
-}
-
-// ═══ INSTAGRAM MESAJLARI ═══
-// Bot ASLA kendisi müşteri kaydı açmaz — sadece konuşur, özetler, "Onay Bekliyor" durumuna
-// düşürür. Gerçek müşteri kaydı sadece burada bir yönetici "Lead'e Dönüştür" dediğinde açılır.
-const IG_STATUS_LABEL={bot_aktif:'🤖 Bot Konuşuyor',ozet_hazir:'⏳ Onay Bekliyor',insan_devraldi:'👤 Sizinle Yazışıyor',lead_donustu:'✅ Lead\'e Dönüştü',reddedildi:'✕ Reddedildi'};
-const IG_STATUS_COLOR={bot_aktif:'#2563EB',ozet_hazir:'#D97706',insan_devraldi:'#7C3AED',lead_donustu:'#059669',reddedildi:'#6B7280'};
-let igConversations=[];
-let igSelectedId=null;
-
-async function renderInstagramMessages(){
-  document.getElementById('main-content').innerHTML=`
-  <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Instagram DM'lerine bot otomatik yanıt verir. Yeterli bilgi (telefon no.) toplanınca konuşmayı özetleyip <b>onayınıza</b> sunar — bot hiçbir zaman kendisi müşteri kaydı açmaz.</div>
-  <div style="display:grid;grid-template-columns:320px 1fr;gap:16px;height:calc(100vh - 190px)">
-    <div class="tbl-wrap" style="display:flex;flex-direction:column;overflow:hidden">
-      <div class="tbl-toolbar"><div class="tbl-label" id="ig-list-count">Yükleniyor...</div></div>
-      <div id="ig-conv-list" style="overflow-y:auto;flex:1"></div>
-    </div>
-    <div class="tbl-wrap" id="ig-detail" style="display:flex;flex-direction:column;overflow:hidden">
-      <div style="padding:40px;text-align:center;color:var(--text3)">Soldan bir konuşma seçin</div>
-    </div>
-  </div>`;
-  try{
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getInstagramConversations',token:CU.token})});
-    const d=await res.json();
-    igConversations=d.conversations||[];
-    window._igPendingCount=igConversations.filter(c=>c.status==='ozet_hazir').length;
-    refreshNavBadges();
-  }catch(e){
-    document.getElementById('ig-conv-list').innerHTML='<div style="padding:20px;color:var(--red);font-size:12px">Yüklenemedi — instagram_conversations tablosu oluşturulmamış olabilir.</div>';
-    document.getElementById('ig-list-count').textContent='Hata';
-    return;
-  }
-  renderIgConvList();
-  if(igSelectedId && igConversations.find(c=>c.id===igSelectedId)) openIgConversation(igSelectedId);
-}
-
-function renderIgConvList(){
-  const listEl=document.getElementById('ig-conv-list');
-  const countEl=document.getElementById('ig-list-count');
-  if(!listEl)return;
-  // Onay bekleyenler en üstte — yöneticinin dikkatini ilk onlar çeksin
-  const sorted=[...igConversations].sort((a,b)=>{
-    if((a.status==='ozet_hazir')!==(b.status==='ozet_hazir')) return a.status==='ozet_hazir'?-1:1;
-    return new Date(b.last_message_at||0)-new Date(a.last_message_at||0);
-  });
-  countEl.textContent=igConversations.length+' konuşma'+(window._igPendingCount?' · '+window._igPendingCount+' onay bekliyor':'');
-  if(!sorted.length){listEl.innerHTML='<div style="padding:24px;text-align:center;color:var(--text3);font-size:12px">Henüz Instagram mesajı yok.</div>';return;}
-  listEl.innerHTML=sorted.map(c=>`
-    <div onclick="openIgConversation('${c.id}')" style="padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;${igSelectedId===c.id?'background:var(--accent-l)':''}" onmouseover="if('${igSelectedId===c.id}'!=='true')this.style.background='var(--surface2)'" onmouseout="if('${igSelectedId===c.id}'!=='true')this.style.background=''">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
-        <span style="font-weight:700;font-size:12px">${esc(c.ig_username||c.ig_user_id)}</span>
-        <span style="font-size:9px;font-weight:700;color:${IG_STATUS_COLOR[c.status]||'#6B7280'}">${IG_STATUS_LABEL[c.status]||c.status}</span>
-      </div>
-      <div style="font-size:10px;color:var(--text3);margin-top:3px">${c.last_message_at?fmtDT(c.last_message_at):'—'}</div>
-    </div>`).join('');
-}
-
-async function openIgConversation(convId){
-  igSelectedId=convId;
-  renderIgConvList();
-  const c=igConversations.find(x=>x.id===convId);
-  const detail=document.getElementById('ig-detail');
-  if(!c||!detail)return;
-  detail.innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div>';
-  let messages=[];
-  try{
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getInstagramMessages',customerId:convId,token:CU.token})});
-    const d=await res.json();
-    messages=d.messages||[];
-  }catch(e){}
-
-  const msgsHTML=messages.map(m=>{
-    const isIn=m.direction==='inbound';
-    return `<div style="display:flex;justify-content:${isIn?'flex-start':'flex-end'};margin-bottom:8px">
-      <div style="max-width:70%;padding:8px 12px;border-radius:12px;font-size:12px;background:${isIn?'var(--surface2)':'var(--accent-l)'};color:var(--text)">
-        ${esc(m.message_text||'')}
-        <div style="font-size:9px;color:var(--text3);margin-top:3px">${m.sender_label==='ai_bot'?'🤖 Bot':m.sender_label==='musteri'?'Müşteri':esc(m.sender_label||'')} · ${fmtDT(m.created_at)}</div>
-      </div>
-    </div>`;
-  }).join('');
-
-  detail.innerHTML=`
-    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
-      <div><div style="font-weight:700;font-size:13px">${esc(c.ig_username||c.ig_user_id)}</div>
-      <div style="font-size:10px;color:${IG_STATUS_COLOR[c.status]||'#6B7280'};font-weight:700;margin-top:2px">${IG_STATUS_LABEL[c.status]||c.status}</div></div>
-    </div>
-    ${c.status==='ozet_hazir'?`
-    <div style="padding:14px 18px;background:var(--amber-bg);border-bottom:1px solid var(--amber)">
-      <div style="font-size:11px;font-weight:700;color:var(--amber);margin-bottom:6px">🤖 AI Özeti — Onayınızı Bekliyor</div>
-      <div style="font-size:12px;color:var(--text);line-height:1.6;margin-bottom:12px">${esc(c.ai_summary||'')}</div>
-      <button class="btn btn-primary btn-sm" onclick="openConvertIgModal('${c.id}')">✓ Lead'e Dönüştür</button>
-      <button class="btn btn-ghost btn-sm" onclick="rejectIgConversation('${c.id}')">✕ Reddet</button>
-    </div>`:''}
-    <div style="flex:1;overflow-y:auto;padding:14px 18px" id="ig-msg-scroll">${msgsHTML||'<div style="color:var(--text3);font-size:12px;text-align:center;padding:20px">Henüz mesaj yok.</div>'}</div>
-    ${c.status!=='lead_donustu'&&c.status!=='reddedildi'?`
-    <div style="padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px">
-      <input class="fi2" id="ig-reply-inp" placeholder="Mesaj yaz — gönderince bot bu konuşmada susar..." style="flex:1">
-      <button class="btn btn-primary btn-sm" onclick="sendIgReply('${c.id}')">Gönder</button>
-    </div>`:''}
-  `;
-  const scrollEl=document.getElementById('ig-msg-scroll');
-  if(scrollEl) scrollEl.scrollTop=scrollEl.scrollHeight;
-}
-
-async function sendIgReply(convId){
-  const inp=document.getElementById('ig-reply-inp');
-  const text=(inp?.value||'').trim();
-  if(!text)return;
-  try{
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sendInstagramMessage',customerId:convId,text,token:CU.token})});
-    const d=await res.json();
-    if(!d.success){toast('Gönderilemedi','red');return;}
-    if(inp)inp.value='';
-    await renderInstagramMessages();
-    openIgConversation(convId);
-  }catch(e){toast('Bağlantı hatası','red');}
-}
-
-async function rejectIgConversation(convId){
-  if(!confirm('Bu konuşma reddedilecek, lead açılmayacak. Emin misiniz?'))return;
-  try{
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'rejectInstagramConversation',customerId:convId,token:CU.token})});
-    const d=await res.json();
-    if(!d.success){toast('Hata','red');return;}
-    toast('✕ Konuşma reddedildi','amber');
-    await renderInstagramMessages();
-  }catch(e){toast('Bağlantı hatası','red');}
-}
-
-// Onay son adımı: AI'nın topladığı bilgiler burada bir form olarak gösterilir,
-// yönetici gözden geçirip düzeltip "Lead'e Dönüştür"e basar — kör onay yok.
-function openConvertIgModal(convId){
-  const c=igConversations.find(x=>x.id===convId);
-  if(!c)return;
-  const m=document.createElement('div');
-  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
-  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:440px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
-    <div style="font-size:16px;font-weight:700;margin-bottom:4px">✓ Lead'e Dönüştür</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:16px">AI özetine göre doldu, kontrol edip düzeltebilirsiniz. Kaydedince round-robin ile bir satış temsilcisine atanır.</div>
-    <div style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--text2);margin-bottom:14px">${esc(c.ai_summary||'')}</div>
-    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Ad Soyad *</label>
-    <input class="fi2" id="igc-name" style="width:100%;padding:8px;margin-bottom:10px" placeholder="Instagram'daki isimden otomatik dolmaz, girin">
-    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Telefon *</label>
-    <input class="fi2" id="igc-phone" style="width:100%;padding:8px;margin-bottom:10px" placeholder="+90 5xx xxx xx xx">
-    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Hedef Ülke</label>
-    <input class="fi2" id="igc-country" style="width:100%;padding:8px;margin-bottom:14px" placeholder="Örn: 🇩🇪 Almanya">
-    <div style="display:flex;gap:8px">
-      <button class="btn btn-ghost" style="flex:1" onclick="this.closest('div[style*=fixed]').remove()">Vazgeç</button>
-      <button class="btn btn-primary" style="flex:1" onclick="confirmConvertIg('${convId}',this)">✓ Onayla ve Ata</button>
-    </div>
-  </div>`;
-  document.body.appendChild(m);
-}
-
-async function confirmConvertIg(convId, btn){
-  const name=document.getElementById('igc-name')?.value.trim();
-  const phone=document.getElementById('igc-phone')?.value.trim();
-  const country=document.getElementById('igc-country')?.value.trim();
-  if(!name||!phone){toast('Ad ve telefon zorunludur','red');return;}
-  btn.disabled=true;btn.textContent='Kaydediliyor...';
-  try{
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'convertInstagramToCustomer',customerId:convId,name,phone,country,token:CU.token})});
-    const d=await res.json();
-    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Kaydedilemedi'),'red');btn.disabled=false;btn.textContent='✓ Onayla ve Ata';return;}
-    document.querySelector('div[style*=fixed]')?.remove();
-    toast('✓ '+name+' lead\'e dönüştürüldü — '+d.id+' ('+d.assignedTo+'\'a atandı)','green');
-    await renderInstagramMessages();
-  }catch(e){toast('Bağlantı hatası','red');btn.disabled=false;btn.textContent='✓ Onayla ve Ata';}
 }
 
 // USERS
