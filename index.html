@@ -347,7 +347,35 @@ textarea.fi2{resize:vertical}
 .cal-daynum{font-size:12px;font-weight:700;color:var(--text2)}
 .cal-dowlabel{font-size:9px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.04em}
 .cal-daynum-today{color:#fff;background:var(--accent);width:21px;height:21px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(37,99,235,.35)}
-.cal-appts{display:flex;flex-direction:column;gap:3px;overflow:hidden}
+.cal-appts{display:flex;flex-direction:column;gap:3px}
+.cal-tip{position:relative}
+.cal-tip:hover{z-index:50}
+.cal-tip:hover::after{
+  content:attr(data-tip);
+  position:absolute;
+  bottom:calc(100% + 7px);
+  left:0;
+  background:#111827;
+  color:#fff;
+  padding:7px 11px;
+  border-radius:8px;
+  font-size:11px;
+  font-weight:600;
+  white-space:nowrap;
+  z-index:200;
+  box-shadow:0 8px 22px rgba(0,0,0,.3);
+  pointer-events:none;
+}
+.cal-tip:hover::before{
+  content:'';
+  position:absolute;
+  bottom:calc(100% + 2px);
+  left:12px;
+  border:5px solid transparent;
+  border-top-color:#111827;
+  z-index:200;
+  pointer-events:none;
+}
 .cal-appt-chip{font-size:10px;padding:3px 7px;border-radius:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;font-weight:600;border-left:2.5px solid transparent;transition:transform .1s,filter .1s}
 .cal-appt-chip:hover{transform:translateX(1px);filter:brightness(0.97)}
 .cal-chip-ready{background:var(--green-bg);color:var(--green);border-left-color:var(--green)}
@@ -1253,6 +1281,49 @@ function getDashFiltered(){
 // Ödeme bazlı ciro hesaplaması: ödeme ne zaman ALINDIYSA o tarihe göre filtreler (kayıt tarihine göre değil)
 // Not: inPaymentPeriod ve getRevenueFiltered kaldırıldı — hiçbir yerden çağrılmıyorlardı.
 // Ciro her yerde getIncomeItems üzerinden hesaplanıyor.
+function showRefundDetail() {
+  var hov = "var(--surface2)";
+  var list = customers.filter(c => c.refundStatus === "Gerçekleşti")
+    .sort((a,b) => (b.refundDate||'').localeCompare(a.refundDate||''));
+  var total = list.reduce((s,c) => s + (c.refundAmount||0), 0);
+  var th = function(t,r) { return "<th style=\"padding:10px 14px;" + (r?"text-align:right;":"") + "font-weight:600;color:var(--text2);border-bottom:1px solid var(--border)\">" + t + "</th>"; };
+  var rows = list.length === 0
+    ? "<tr><td colspan=6 style=text-align:center;padding:32px>Gerçekleşmiş iade yok</td></tr>"
+    : list.map(function(c) {
+        return "<tr data-cid='" + c.id + "' class=ref-row style=cursor:pointer>"
+          + "<td style=\"padding:10px 14px;font-weight:600\">" + esc(c.name) + "</td>"
+          + "<td style=\"padding:10px 14px;color:var(--text2)\">" + (c.country||"—") + "</td>"
+          + "<td style=\"padding:10px 14px;color:var(--text2)\">" + (c.rep||"—") + "</td>"
+          + "<td style=\"padding:10px 14px;text-align:right;color:var(--red);font-weight:700\">" + fmtTL(c.refundAmount||0) + "</td>"
+          + "<td style=\"padding:10px 14px;color:var(--text2);font-size:11px\">" + esc(c.refundReason||"—") + "</td>"
+          + "<td style=\"padding:10px 14px;color:var(--text3);font-size:11px\">" + (c.refundDate?fmtDate(c.refundDate):"—") + "</td>"
+          + "</tr>";
+      }).join("");
+  var m = document.createElement("div");
+  m.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
+  m.addEventListener("click", function(e){if(e.target===m)m.remove();});
+  m.innerHTML = "<div style=\"background:var(--bg);border-radius:16px;width:100%;max-width:820px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.3)\">"
+    + "<div style=\"padding:20px 24px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between\">"
+    + "<div><div style=\"font-size:16px;font-weight:700\">↩ Toplam İade Detayı (Tüm Zamanlar)</div>"
+    + "<div style=\"font-size:13px;color:var(--red);font-weight:600;margin-top:2px\">" + list.length + " müşteri · Toplam: " + fmtTL(total) + "</div></div>"
+    + "<button id=ref-close style=\"background:none;border:none;font-size:20px;cursor:pointer\">✕</button></div>"
+    + "<div style=\"overflow-y:auto;flex:1\"><table style=\"width:100%;border-collapse:collapse;font-size:12px\">"
+    + "<thead style=\"position:sticky;top:0;background:var(--surface2)\"><tr>"
+    + th("Müşteri") + th("Ülke") + th("Temsilci") + th("Tutar",true) + th("Neden") + th("İade Tarihi")
+    + "</tr></thead><tbody>" + rows + "</tbody></table></div>"
+    + "<div style=\"padding:14px 24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:12px;color:var(--text2)\">"
+    + "<span>" + list.length + " müşteri</span>"
+    + "<span style=\"font-weight:700;color:var(--red)\">Toplam İade: " + fmtTL(total) + "</span></div>"
+    + "</div>";
+  document.body.appendChild(m);
+  document.getElementById("ref-close").addEventListener("click", function(){m.remove();});
+  m.querySelectorAll(".ref-row").forEach(function(tr) {
+    tr.addEventListener("mouseover", function(){tr.style.background=hov;});
+    tr.addEventListener("mouseout", function(){tr.style.background="";});
+    tr.addEventListener("click", function(){m.remove();openPanel(tr.dataset.cid);});
+  });
+}
+
 function showPendingDetail() {
   var hov = "var(--surface2)";
   var list = customers.filter(c => (c.fee||0)-(c.prepay||0)>0 && c.status!=="İptal")
@@ -2006,6 +2077,18 @@ function computeCustFiltered(){
   });
 }
 function applyCustFilters(){filtered=computeCustFiltered();renderRows();}
+
+// Bir işlem sonrası (durum değişikliği, not/arama ekleme, ödeme güncelleme, transfer vb.)
+// Müşteriler tablosunu tazelemek için kullanılır. loadCustomers() her seferinde filtered'ı
+// TÜM müşterilere sıfırlar (bu, Pipeline gibi başka sayfaların da doğru veri görmesi için
+// GEREKLİDİR ve dokunulmamalı) — ama Müşteriler sayfasındaysak, kullanıcının o an aktif
+// olan aşama/arama/ülke filtresini kaybetmemesi için burada YENİDEN uygulanır.
+function refreshCustTable(){
+  if(document.getElementById('cust-tbody')){
+    filtered=computeCustFiltered();
+    renderRows();
+  }
+}
 function fC(q){custSearchQuery=q;applyCustFilters();}
 function fCo(s){custCountryFilter=s;applyCustFilters();}
 function toggleCustStatus(status,checked){
@@ -2430,7 +2513,8 @@ function renderVisaCalendar(){
   const now=new Date();
   if(vcYear===undefined){vcYear=now.getFullYear();vcMonth=now.getMonth();}
   document.getElementById('main-content').innerHTML=`
-    <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Vizesi onaylanmış müşteriler burada görünür — 🟢 başlangıç tarihi, 🔴 bitiş tarihi. Bir güne veya isme tıklayarak müşteri dosyasını açabilirsiniz.</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Vizesi onaylanmış müşteriler burada görünür — 🟢 başlangıç tarihi, 🔴 bitiş tarihi. Bir isme fareyle gelirsen tam tarih aralığını görürsün; tıklarsan müşteri dosyası açılır. Üstteki rozetlere tıklayarak o ayın tüm listesini görebilirsin.</div>
+    <div id="vc-nodate-warn"></div>
     <div id="vc-wrap"></div>`;
   drawVisaCalendar();
 }
@@ -2448,8 +2532,29 @@ function vcGoToday(){
   drawVisaCalendar();
 }
 
+// Vize tarihi aralığını tooltip metni olarak biçimlendirir: eksik tarih varsa açıkça belirtir.
+function vcTooltip(c){
+  const s=c.visaStartDate?fmtDate(c.visaStartDate):'Girilmedi';
+  const e=c.visaEndDate?fmtDate(c.visaEndDate):'Girilmedi';
+  return esc(c.name)+' — Başlangıç: '+s+' · Bitiş: '+e;
+}
+
 function drawVisaCalendar(){
-  const approved=customers.filter(c=>c.visaResult==='Onaylandı'&&(c.visaStartDate||c.visaEndDate));
+  const allApproved=customers.filter(c=>c.visaResult==='Onaylandı');
+  const approved=allApproved.filter(c=>c.visaStartDate||c.visaEndDate);
+  // Onaylı ama HİÇ tarih girilmemiş müşteriler — takvimde hiç görünmeyecekleri için ayrıca uyarı olarak listelenir.
+  const noDateList=allApproved.filter(c=>!c.visaStartDate&&!c.visaEndDate);
+
+  const warnEl=document.getElementById('vc-nodate-warn');
+  if(warnEl){
+    warnEl.innerHTML = noDateList.length ? `
+    <div style="background:var(--amber-bg);border:1px solid var(--amber);border-radius:10px;padding:12px 16px;margin-bottom:16px">
+      <div style="font-size:12px;font-weight:700;color:var(--amber);margin-bottom:8px">⚠️ Vizesi onaylı ama tarih girilmemiş ${noDateList.length} müşteri (takvimde görünmüyor):</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        ${noDateList.map(c=>`<span onclick="openPanel('${c.id}')" style="cursor:pointer;background:#fff;border:1px solid var(--amber);color:#92400E;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px">${esc(c.name)}</span>`).join('')}
+      </div>
+    </div>` : '';
+  }
 
   // Bu ay içindeki başlangıç/bitiş olaylarını güne göre grupla
   const eventsByDay={}; // day -> [{c,type:'start'|'end'}]
@@ -2485,7 +2590,7 @@ function drawVisaCalendar(){
       <div class="cal-appts">
         ${evts.slice(0,3).map(ev=>{
           const isEnd=ev.type==='end';
-          return `<div class="cal-appt-chip ${isEnd?'cal-chip-visaend':'cal-chip-visastart'}" onclick="openPanel('${ev.c.id}')" title="${esc(ev.c.name)} — ${isEnd?'Vize bitiş':'Vize başlangıç'}">${isEnd?'🔴':'🟢'} ${esc(ev.c.name)}</div>`;
+          return `<div class="cal-appt-chip ${isEnd?'cal-chip-visaend':'cal-chip-visastart'} cal-tip" data-tip="${vcTooltip(ev.c)}" onclick="openPanel('${ev.c.id}')">${isEnd?'🔴':'🟢'} ${esc(ev.c.name)}</div>`;
         }).join('')}
         ${evts.length>3?`<div class="cal-more" onclick="showVisaDayModal('${dateStr}')">+${evts.length-3} daha</div>`:''}
       </div>
@@ -2504,12 +2609,47 @@ function drawVisaCalendar(){
         <button class="btn btn-ghost btn-sm" onclick="vcGoToday()">Bugün</button>
       </div>
       <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
-        <div class="cal-legend"><span class="cal-legend-dot" style="background:#059669"></span>Başlangıç (${startCount})</div>
-        <div class="cal-legend"><span class="cal-legend-dot" style="background:#DC2626"></span>Bitiş (${endCount})</div>
-        <div class="cal-count">${endCount} vize bu ay bitiyor</div>
+        <div class="cal-legend" style="cursor:pointer" onclick="showVisaMonthModal('start')" title="Bu ayki tüm başlangıçları listele"><span class="cal-legend-dot" style="background:#059669"></span>Başlangıç (${startCount})</div>
+        <div class="cal-legend" style="cursor:pointer" onclick="showVisaMonthModal('end')" title="Bu ayki tüm bitişleri listele"><span class="cal-legend-dot" style="background:#DC2626"></span>Bitiş (${endCount})</div>
+        <div class="cal-count" style="cursor:pointer" onclick="showVisaMonthModal('end')" title="Bu ayki tüm bitişleri listele">${endCount} vize bu ay bitiyor</div>
       </div>
     </div>
     <div class="cal-grid">${cells}</div>`;
+}
+
+// Ayın tamamındaki başlangıç YA DA bitiş olaylarını (tek bir güne değil, tüm aya bakarak) listeler.
+function showVisaMonthModal(type){
+  const field = type==='end' ? 'visaEndDate' : 'visaStartDate';
+  const label = type==='end' ? '🔴 Bu Ay Biten Vizeler' : '🟢 Bu Ay Başlayan Vizeler';
+  const color = type==='end' ? 'var(--red)' : 'var(--green)';
+  const list = customers.filter(c=>{
+    if(c.visaResult!=='Onaylandı'||!c[field])return false;
+    const d=new Date(c[field]+'T00:00:00');
+    return !isNaN(d.getTime())&&d.getFullYear()===vcYear&&d.getMonth()===vcMonth;
+  }).sort((a,b)=>(a[field]||'').localeCompare(b[field]||''));
+
+  const m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  m.addEventListener('click',e=>{if(e.target===m)m.remove();});
+  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:560px;width:100%;max-height:80vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg)">
+      <div style="font-size:15px;font-weight:700">${label} — ${CAL_MONTHS_TR[vcMonth]} ${vcYear}</div>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>
+    </div>
+    <div style="padding:8px">
+      ${list.map(c=>`
+      <div onclick="this.closest('div[style*=fixed]').remove();openPanel('${c.id}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;cursor:pointer;border-left:3px solid ${color}" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="width:80px;font-size:12px;font-weight:700;color:${color}">${fmtDate(c[field])}</div>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:13px">${esc(c.name)}</div>
+          <div style="font-size:11px;color:var(--text2)">${c.country||'—'} · ${fmtDate(c.visaStartDate)} → ${fmtDate(c.visaEndDate)}</div>
+        </div>
+      </div>`).join('')}
+      ${list.length===0?'<div style="padding:24px;text-align:center;color:var(--text3)">Bu ay için kayıt yok</div>':''}
+    </div>
+    <div style="padding:10px 22px;border-top:1px solid var(--border);font-size:11px;color:var(--text3)">${list.length} müşteri</div>
+  </div>`;
+  document.body.appendChild(m);
 }
 
 function showVisaDayModal(dateStr){
@@ -3370,10 +3510,11 @@ function renderMuhasebePage() {
       <div class="stat-val" style="color:var(--amber)">${fmtTL(totalBekleyen)}</div>
       <div class="stat-label">Bekleyen · ${bekleyenList.length} müşteri</div>
     </div>
-    <div class="stat-card c-red">
+    <div class="stat-card c-red" style="cursor:pointer" onclick="showRefundDetail()">
       <div class="stat-icon" style="background:var(--red-bg);color:var(--red)">↩</div>
       <div class="stat-val" style="color:var(--red)">${fmtTL(totalIade)}</div>
       <div class="stat-label">Toplam İade (tüm zamanlar)</div>
+      <div class="stat-trend" style="color:var(--red);font-size:10px">Detay için tıkla →</div>
     </div>
     <div class="stat-card">
       <div class="stat-icon" style="background:var(--accent-l);color:var(--accent)">👤</div>
@@ -5432,7 +5573,7 @@ async function transferCustomer(id, dept){
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Aktarılamadı'),'red');return;}
     await loadCustomers();
     await openPanel(id);
-    if(document.getElementById('cust-tbody'))renderRows();
+    refreshCustTable();
     if(document.getElementById('kanban'))renderPipeline();
     toast(dept==='evrak'?'✓ Evrak sorumlusuna aktarıldı':'✓ Temsilciye aktarıldı','green');
   }catch(e){
@@ -5508,7 +5649,7 @@ async function updateCustomerInfo(id){
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
     await loadCustomers();
     await openPanel(id);
-    if(document.getElementById('cust-tbody'))renderRows();
+    refreshCustTable();
     toast('✓ Müşteri bilgileri güncellendi','green');
   }catch(e){
     toast('Bağlantı hatası','red');
@@ -5581,7 +5722,7 @@ async function toggleInvoice(custId, yeniDurum){
     toast(yeniDurum?'✓ Fatura kesildi olarak işaretlendi':'Fatura kesilmedi olarak işaretlendi','green');
     await loadCustomers();
     await openPanel(custId, panelReadOnly);
-    if(document.getElementById('cust-tbody'))renderRows();
+    refreshCustTable();
   }catch(e){toast('Bağlantı hatası','red');}
 }
 
@@ -5603,7 +5744,7 @@ async function updatePayment(id){
     }
     await loadCustomers();
     await openPanel(id);
-    if(document.getElementById('cust-tbody'))renderRows();
+    refreshCustTable();
     toast('✓ Ödeme bilgileri güncellendi','green');
   }catch(e){
     toast('Bağlantı hatası','red');
@@ -5760,7 +5901,7 @@ async function deleteCustomer(id){
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Silinemedi'),'red');return;}
     await loadCustomers();
     closePanel();
-    if(document.getElementById('cust-tbody'))renderRows();
+    refreshCustTable();
     if(document.getElementById('kanban'))renderPipeline();
     toast('🗑 '+name+' silindi','red');
   }catch(e){
@@ -5849,7 +5990,7 @@ async function saveVisa(id){
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
     await loadCustomers();
     await openPanel(id);
-    if(document.getElementById('cust-tbody'))renderRows();
+    refreshCustTable();
     toast('✓ Vize bilgileri kaydedildi','green');
   }catch(e){toast('Bağlantı hatası','red');}
 }
@@ -5874,7 +6015,7 @@ async function saveAppt(id){
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
     await loadCustomers();
     await openPanel(id);
-    if(document.getElementById('cust-tbody'))renderRows();
+    refreshCustTable();
     if(document.getElementById('kanban'))renderPipeline();
     toast(v?'📅 Randevu kaydedildi':'Randevu temizlendi','blue');
   }catch(e){
@@ -5889,7 +6030,7 @@ async function moveStatus(id,ns){
     if(!d.success){toast('⚠️ '+(d.error||'İşlem yapılamadı'),'red');return;}
     await loadCustomers();
     closePanel();
-    if(document.getElementById('cust-tbody'))renderRows();
+    refreshCustTable();
     if(document.getElementById('kanban'))renderPipeline();
     toast('✓ Aşama: '+ns,'green');
   }catch(e){
@@ -5915,10 +6056,10 @@ async function collectKalan(id, totalFee){
     await loadCustomers();
     await loadAllPayments();
     await openPanel(id);
-    if(document.getElementById('cust-tbody'))renderRows();
+    refreshCustTable();
     const dateLabel = paymentDate ? fmtDate(paymentDate) : 'bugün';
     toast('✓ '+fmtTL(amount)+' tahsil edildi — '+dateLabel+' tarihi ile kaydedildi','green');
-    if(document.getElementById('cust-tbody'))renderRows();
+    refreshCustTable();
     if(document.getElementById('kanban'))renderPipeline();
   } catch(e){ toast('Bağlantı hatası','red'); }
 }
@@ -5931,7 +6072,7 @@ async function addCall(id){
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
     await loadCustomers();
     await openPanel(id);
-    if(document.getElementById('cust-tbody'))renderRows();
+    refreshCustTable();
     toast('📞 Arama kaydedildi — '+RLABELS[r],'blue');
   }catch(e){
     toast('Bağlantı hatası','red');
@@ -5955,7 +6096,7 @@ async function saveNote(id){
     inp.value='';
     await loadCustomers();
     await openPanel(id);
-    if(document.getElementById('cust-tbody'))renderRows();
+    refreshCustTable();
     toast('✓ Not kaydedildi','green');
   }catch(e){
     toast('Bağlantı hatası','red');
@@ -6018,11 +6159,11 @@ async function addCustomer(){
   try{
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Eklenemedi'),'red');if(btn){btn.disabled=false;btn.textContent='✓ Müşteriyi Kaydet';}addingCustomer=false;return;}
-    if(d.duplicate){toast('⚠️ Bu telefon numarası az önce kaydedildi ('+d.id+')','amber');closeModal();addingCustomer=false;loadCustomers().then(()=>{if(document.getElementById('cust-tbody'))renderRows();});return;}
+    if(d.duplicate){toast('⚠️ Bu telefon numarası az önce kaydedildi ('+d.id+')','amber');closeModal();addingCustomer=false;loadCustomers().then(()=>{refreshCustTable();});return;}
     closeModal();
     toast('✓ '+name+' eklendi — '+d.id+' ('+d.assignedTo+'\'a atandı)','green');
     ['nm-name','nm-phone','nm-email','nm-fee','nm-pre','nm-rem'].forEach(i=>{const el=document.getElementById(i);if(el)el.value='';});
-    loadCustomers().then(()=>{if(document.getElementById('cust-tbody'))renderRows();if(document.getElementById('kanban'))renderPipeline();});
+    loadCustomers().then(()=>{refreshCustTable();if(document.getElementById('kanban'))renderPipeline();});
   }catch(e){
     toast('Sunucu yanıt hatası — lütfen tekrar deneyin','red');
     if(btn){btn.disabled=false;btn.textContent='✓ Müşteriyi Kaydet';}
