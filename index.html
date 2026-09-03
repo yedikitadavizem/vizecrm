@@ -352,6 +352,8 @@ textarea.fi2{resize:vertical}
 .cal-appt-chip:hover{transform:translateX(1px);filter:brightness(0.97)}
 .cal-chip-ready{background:var(--green-bg);color:var(--green);border-left-color:var(--green)}
 .cal-chip-pending{background:var(--amber-bg);color:var(--amber);border-left-color:var(--amber)}
+.cal-chip-visastart{background:var(--green-bg);color:var(--green);border-left-color:var(--green)}
+.cal-chip-visaend{background:var(--red-bg);color:var(--red);border-left-color:var(--red)}
 .cal-more{font-size:10px;color:var(--text3);cursor:pointer;padding:1px 7px;font-weight:700}
 .cal-more:hover{text-decoration:underline;color:var(--accent)}
 @media(max-width:900px){.cal-grid{gap:5px}.cal-cell{min-height:68px;padding:5px}.cal-appt-chip{font-size:9px;padding:2px 5px}.cal-month-label{min-width:auto}}
@@ -1013,6 +1015,7 @@ function renderNavMenu(){
     <button class="nav-item" onclick="showPage(\'calendar\')"><span class="nav-icon">📅</span> Takvim</button>
     ${!isM?'<button class="nav-item" onclick="showPage(\'sold\')"><span class="nav-icon">📈</span> Satışlarım</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'consulate\')"><span class="nav-icon">🛂</span> Konsolosluk Takibi</button>':''}
+    ${isM?'<button class="nav-item" onclick="showPage(\'visacalendar\')"><span class="nav-icon">🗓️</span> Vize Takvimi</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'completed\')"><span class="nav-icon">✅</span> Tamamlandı'+(completedCount?' <span class="nav-badge">'+completedCount+'</span>':'')+'</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'cancelled\')"><span class="nav-icon">🚫</span> İptal Edilenler'+(cancelledCount?' <span class="nav-badge">'+cancelledCount+'</span>':'')+'</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'notinterested\')"><span class="nav-icon">😐</span> İlgilenmiyor'+(notInterestedCount?' <span class="nav-badge">'+notInterestedCount+'</span>':'')+'</button>':''}
@@ -1040,7 +1043,7 @@ async function initApp(){
     <div class="tb-search" id="tb-search-wrap"><span>🔍</span><input placeholder="Müşteri ara..." oninput="gSearch(this.value)"></div>
     <button class="btn btn-primary" onclick="openModal()">+ Yeni Müşteri</button>
   `;
-  const allowedPages=isM?['dashboard','today','customers','pipeline','calendar','consulate','completed','cancelled','notinterested','muhasebe','performance','refunds','users','account']:['today','customers','pipeline','calendar','sold','account'];
+  const allowedPages=isM?['dashboard','today','customers','pipeline','calendar','visacalendar','consulate','completed','cancelled','notinterested','muhasebe','performance','refunds','users','account']:['today','customers','pipeline','calendar','sold','account'];
   const savedPage=localStorage.getItem('vizecrm_lastpage');
   const startPage=(savedPage&&allowedPages.includes(savedPage))?savedPage:(isM?'dashboard':'customers');
   await showPage(startPage);
@@ -1112,7 +1115,7 @@ function goAddMealExpense(){
   });
 }
 
-const PTITLES={dashboard:'Dashboard',today:'Bugün Ne Yapmalıyım',customers:'Müşteriler',pipeline:'Pipeline',calendar:'Takvim',sold:'Satışlarım',consulate:'Konsolosluk Takibi',completed:'Tamamlandı',cancelled:'İptal Edilenler',notinterested:'İlgilenmiyor',muhasebe:'Muhasebe',performance:'Performans',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
+const PTITLES={dashboard:'Dashboard',today:'Bugün Ne Yapmalıyım',customers:'Müşteriler',pipeline:'Pipeline',calendar:'Takvim',visacalendar:'Vize Takvimi',sold:'Satışlarım',consulate:'Konsolosluk Takibi',completed:'Tamamlandı',cancelled:'İptal Edilenler',notinterested:'İlgilenmiyor',muhasebe:'Muhasebe',performance:'Performans',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
 // Sayfa geçişlerinde YARIŞ KORUMASI:
 // showPage async — veri çekerken (await) kullanıcı başka sayfaya tıklarsa iki showPage
 // aynı anda çalışır. Yavaş olan sonra bitip ekranı ezerse, kullanıcı tıklamadığı sayfayı
@@ -1132,12 +1135,12 @@ async function showPage(p){
   soldSearch='';
   const searchWrap=document.getElementById('tb-search-wrap');
   if(searchWrap){searchWrap.style.display=(p==='dashboard')?'none':'';const si=searchWrap.querySelector('input');if(si)si.value='';}
-  if(p==='dashboard'||p==='today'||p==='customers'||p==='pipeline'||p==='calendar'||p==='refunds'||p==='consulate'||p==='completed'||p==='cancelled'||p==='notinterested'||p==='muhasebe'||p==='performance')await loadCustomers();
+  if(p==='dashboard'||p==='today'||p==='customers'||p==='pipeline'||p==='calendar'||p==='visacalendar'||p==='refunds'||p==='consulate'||p==='completed'||p==='cancelled'||p==='notinterested'||p==='muhasebe'||p==='performance')await loadCustomers();
   if(mySeq!==navSeq) return; // kullanıcı başka sayfaya geçti — bu render'ı çöpe at
   if((p==='dashboard'||p==='muhasebe')&&CU.role==='management') await loadAllPayments();
   if(mySeq!==navSeq) return;
   refreshNavBadges(); // veri tazelendi, kenar çubuğu sayaçları da güncellensin
-  await ({dashboard:renderDash,today:renderToday,customers:renderCusts,pipeline:renderPipeline,calendar:renderCalendar,sold:renderSold,consulate:renderConsulate,completed:renderCompleted,cancelled:renderCancelled,notinterested:renderNotInterested,muhasebe:renderMuhasebe,performance:renderPerformance,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
+  await ({dashboard:renderDash,today:renderToday,customers:renderCusts,pipeline:renderPipeline,calendar:renderCalendar,visacalendar:renderVisaCalendar,sold:renderSold,consulate:renderConsulate,completed:renderCompleted,cancelled:renderCancelled,notinterested:renderNotInterested,muhasebe:renderMuhasebe,performance:renderPerformance,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
 }
 function gSearch(q){
   const sq=q.toLowerCase().trim();
@@ -2414,6 +2417,125 @@ function showCalDayModal(dateStr){
         <span class="badge ${SCLS[c.status]||'b-lead'}" style="font-size:10px">${c.status}</span>
       </div>`;}).join('')}
       ${list.length===0?'<div style="padding:24px;text-align:center;color:var(--text3)">Randevu yok</div>':''}
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+// ===== VİZE TAKVİMİ =====
+// Sadece vizesi ONAYLANMIŞ müşterileri, başlangıç/bitiş tarihleriyle ay takviminde gösterir.
+let vcYear, vcMonth;
+
+function renderVisaCalendar(){
+  const now=new Date();
+  if(vcYear===undefined){vcYear=now.getFullYear();vcMonth=now.getMonth();}
+  document.getElementById('main-content').innerHTML=`
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Vizesi onaylanmış müşteriler burada görünür — 🟢 başlangıç tarihi, 🔴 bitiş tarihi. Bir güne veya isme tıklayarak müşteri dosyasını açabilirsiniz.</div>
+    <div id="vc-wrap"></div>`;
+  drawVisaCalendar();
+}
+
+function vcNav(delta){
+  vcMonth+=delta;
+  if(vcMonth<0){vcMonth=11;vcYear--;}
+  if(vcMonth>11){vcMonth=0;vcYear++;}
+  drawVisaCalendar();
+}
+
+function vcGoToday(){
+  const now=new Date();
+  vcYear=now.getFullYear();vcMonth=now.getMonth();
+  drawVisaCalendar();
+}
+
+function drawVisaCalendar(){
+  const approved=customers.filter(c=>c.visaResult==='Onaylandı'&&(c.visaStartDate||c.visaEndDate));
+
+  // Bu ay içindeki başlangıç/bitiş olaylarını güne göre grupla
+  const eventsByDay={}; // day -> [{c,type:'start'|'end'}]
+  approved.forEach(c=>{
+    [['visaStartDate','start'],['visaEndDate','end']].forEach(([field,type])=>{
+      const val=c[field];
+      if(!val)return;
+      const d=new Date(val+'T00:00:00');
+      if(isNaN(d.getTime()))return;
+      if(d.getFullYear()===vcYear&&d.getMonth()===vcMonth){
+        const day=d.getDate();
+        if(!eventsByDay[day])eventsByDay[day]=[];
+        eventsByDay[day].push({c,type});
+      }
+    });
+  });
+
+  const daysInMonth=new Date(vcYear,vcMonth+1,0).getDate();
+  const todayStr=getTodayStr();
+
+  let cells='';
+  for(let day=1;day<=daysInMonth;day++){
+    const dateStr=vcYear+'-'+String(vcMonth+1).padStart(2,'0')+'-'+String(day).padStart(2,'0');
+    const isToday=dateStr===todayStr;
+    const evts=eventsByDay[day]||[];
+    const dow=new Date(vcYear,vcMonth,day).getDay();
+    const dowLabel=CAL_DAYS_TR[dow===0?6:dow-1];
+    cells+=`<div class="cal-cell ${isToday?'cal-today':''} ${evts.length?'cal-has-appt':''}">
+      <div class="cal-daynum-row">
+        <div class="cal-daynum ${isToday?'cal-daynum-today':''}">${day}</div>
+        <div class="cal-dowlabel">${dowLabel}</div>
+      </div>
+      <div class="cal-appts">
+        ${evts.slice(0,3).map(ev=>{
+          const isEnd=ev.type==='end';
+          return `<div class="cal-appt-chip ${isEnd?'cal-chip-visaend':'cal-chip-visastart'}" onclick="openPanel('${ev.c.id}')" title="${esc(ev.c.name)} — ${isEnd?'Vize bitiş':'Vize başlangıç'}">${isEnd?'🔴':'🟢'} ${esc(ev.c.name)}</div>`;
+        }).join('')}
+        ${evts.length>3?`<div class="cal-more" onclick="showVisaDayModal('${dateStr}')">+${evts.length-3} daha</div>`:''}
+      </div>
+    </div>`;
+  }
+
+  const endCount=Object.values(eventsByDay).flat().filter(e=>e.type==='end').length;
+  const startCount=Object.values(eventsByDay).flat().filter(e=>e.type==='start').length;
+
+  document.getElementById('vc-wrap').innerHTML=`
+    <div class="cal-toolbar">
+      <div style="display:flex;align-items:center;gap:8px">
+        <button class="btn btn-ghost btn-sm" onclick="vcNav(-1)">←</button>
+        <div class="cal-month-label">${CAL_MONTHS_TR[vcMonth]} ${vcYear}</div>
+        <button class="btn btn-ghost btn-sm" onclick="vcNav(1)">→</button>
+        <button class="btn btn-ghost btn-sm" onclick="vcGoToday()">Bugün</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <div class="cal-legend"><span class="cal-legend-dot" style="background:#059669"></span>Başlangıç (${startCount})</div>
+        <div class="cal-legend"><span class="cal-legend-dot" style="background:#DC2626"></span>Bitiş (${endCount})</div>
+        <div class="cal-count">${endCount} vize bu ay bitiyor</div>
+      </div>
+    </div>
+    <div class="cal-grid">${cells}</div>`;
+}
+
+function showVisaDayModal(dateStr){
+  const startList=customers.filter(c=>c.visaStartDate===dateStr&&c.visaResult==='Onaylandı');
+  const endList=customers.filter(c=>c.visaEndDate===dateStr&&c.visaResult==='Onaylandı');
+  const m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
+  m.addEventListener('click',e=>{if(e.target===m)m.remove();});
+  function row(c,label,color){
+    return `<div onclick="this.closest('div[style*=fixed]').remove();openPanel('${c.id}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;cursor:pointer;border-left:3px solid ${color}" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+      <div style="flex:1">
+        <div style="font-weight:600;font-size:13px">${esc(c.name)}</div>
+        <div style="font-size:11px;color:var(--text2)">${c.country||'—'} · ${fmtDate(c.visaStartDate)} → ${fmtDate(c.visaEndDate)}</div>
+      </div>
+      <span style="font-size:10px;font-weight:700;color:${color}">${label}</span>
+    </div>`;
+  }
+  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:560px;width:100%;max-height:80vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+    <div style="padding:18px 22px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg)">
+      <div style="font-size:15px;font-weight:700">🗓️ ${fmtDate(dateStr)}</div>
+      <button onclick="this.closest('div[style*=fixed]').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--text3)">✕</button>
+    </div>
+    <div style="padding:8px">
+      ${startList.map(c=>row(c,'🟢 Başlangıç','var(--green)')).join('')}
+      ${endList.map(c=>row(c,'🔴 Bitiş','var(--red)')).join('')}
+      ${(startList.length+endList.length)===0?'<div style="padding:24px;text-align:center;color:var(--text3)">Bu tarihte vize olayı yok</div>':''}
     </div>
   </div>`;
   document.body.appendChild(m);
