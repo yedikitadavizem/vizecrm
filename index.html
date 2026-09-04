@@ -2420,6 +2420,7 @@ function drawCalendar(){
   const apptsByDay={};
   customers.forEach(c=>{
     if(!c.apptDate)return;
+    if(c.status==='İptal')return; // İptal edilen müşteri takvimde hiç görünmez — sadece İptal Edilenler sekmesinde
     const d=new Date(c.apptDate+'T00:00:00');
     if(isNaN(d.getTime()))return;
     if(d.getFullYear()===calYear&&d.getMonth()===calMonth){
@@ -2477,7 +2478,7 @@ function drawCalendar(){
 }
 
 function showCalDayModal(dateStr){
-  const list=customers.filter(c=>c.apptDate===dateStr).sort((a,b)=>(a.apptTime||'').localeCompare(b.apptTime||''));
+  const list=customers.filter(c=>c.apptDate===dateStr&&c.status!=='İptal').sort((a,b)=>(a.apptTime||'').localeCompare(b.apptTime||''));
   const m=document.createElement('div');
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:16px';
   m.addEventListener('click',e=>{if(e.target===m)m.remove();});
