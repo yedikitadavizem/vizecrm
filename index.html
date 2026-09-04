@@ -559,6 +559,10 @@ let custStatusFilter=[]; // çoklu seçim — boşsa tüm aşamalar
 let custCountryFilter='';
 let panelReadOnly=false;
 let panelSalesView=false;
+// "Yeni Data Çek" mekanizması: forcedLeadCustomerId doluyken, o müşteriye not veya arama
+// kaydı eklenene (forcedLeadUnlocked=true olana) kadar panel kapatılamaz, başka sayfaya geçilemez.
+let forcedLeadCustomerId=null;
+let forcedLeadUnlocked=false;
 let panelPayments=[];
 let panelCustExpenses=[];
 let allCustExpenses=[];
@@ -1152,6 +1156,12 @@ const PTITLES={dashboard:'Dashboard',today:'Bugün Ne Yapmalıyım',customers:'M
 let navSeq = 0;
 
 async function showPage(p){
+  // "Yeni Data Çek" ile açılmış zorunlu panel, not/arama kaydı eklenmeden kapanamadığı gibi,
+  // başka bir sayfaya geçilerek de es geçilemez.
+  if(forcedLeadCustomerId && !forcedLeadUnlocked){
+    toast('⚠️ Önce açık müşteriye not veya arama kaydı ekleyin','amber');
+    return;
+  }
   const mySeq = ++navSeq;
   document.getElementById('main-content').innerHTML='<div style="padding:60px;text-align:center;color:var(--text3);font-size:13px">Yükleniyor...</div>';
   document.getElementById('page-title').textContent=PTITLES[p]||p;
@@ -2129,6 +2139,16 @@ function renderCusts(){
   }).filter(r=>r&&r!=='—'&&r!=='Henüz atanmadı'))].sort();
   const hasColFilter=tableSort.col||tableRepFilter||tableColSearch;
   document.getElementById('main-content').innerHTML=`
+  ${CU.role==='sales'?`<div style="background:linear-gradient(135deg,#2563EB,#1D4ED8);color:#fff;border-radius:12px;padding:16px 20px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="font-size:24px">📥</span>
+      <div>
+        <div style="font-weight:800;font-size:14px">Yeni Müşteri Kuyruğu</div>
+        <div style="font-size:12px;opacity:.88;margin-top:2px">Sana atanan yeni müşteriler burada birikir — tek tek çekip hemen ilgilenmen gerekir.</div>
+      </div>
+    </div>
+    <button class="btn btn-sm" style="background:#fff;color:#1D4ED8;font-weight:800;padding:9px 18px" onclick="pullNextLead()">🔄 Yeni Data Çek</button>
+  </div>`:''}
   ${renderReminderBanner(todayRem)}
   <div id="bulk-toolbar" style="display:none;background:var(--accent-l);border:1px solid var(--accent);border-radius:8px;padding:10px 14px;margin-bottom:10px;align-items:center;gap:10px;flex-wrap:wrap">
     <span style="font-size:12px;font-weight:700;color:var(--accent)"><span id="bulk-count">0</span> müşteri seçildi</span>
@@ -4949,6 +4969,23 @@ async function savePw(){
 const RLABELS={ulasildi:'✅ Ulaşıldı',cevapsiz:'📵 Cevap Vermedi',sonra_ara:'🔄 Sonra Ara',mesaj:'💬 Mesaj Bırakıldı'};
 const RCLS={ulasildi:'b-completed',cevapsiz:'b-cancelled',sonra_ara:'b-callback',mesaj:'b-proposal'};
 
+// "Yeni Data Çek" — satış temsilcisine atanmış ama henüz görmediği bir sonraki müşteriyi
+// backend'den tek tek çeker ve doğrudan zorunlu (kilitli) panel olarak açar.
+async function pullNextLead(){
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'pullNextLead',token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Çekilemedi'),'red');return;}
+    if(!d.found){toast('📭 Şu an mevcut yeni data bulunmuyor','blue');return;}
+    forcedLeadCustomerId=d.customerId;
+    forcedLeadUnlocked=false;
+    await loadCustomers();
+    refreshCustTable();
+    await openPanel(d.customerId);
+    toast('📥 Yeni müşteri çekildi: '+(d.customerName||''),'green');
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
 async function openPanel(id, readonly=false){
   panelReadOnly=readonly;
   panelSalesView=readonly && CU.role==='sales';
@@ -5034,6 +5071,7 @@ async function openPanel(id, readonly=false){
     :qBtnList.map(s=>`<button class="qs-btn ${c.status===s?'active':''}" onclick="moveStatus('${c.id}','${s}')">${s}</button>`).join('');
 
   document.getElementById('panel-body').innerHTML=`
+  ${(forcedLeadCustomerId===c.id&&!forcedLeadUnlocked)?'<div style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);border:2px solid #D97706;border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:20px">🔒</span><div><div style="font-weight:800;font-size:12px;color:#92400E">Bu panel kilitli — kapatamazsınız</div><div style="font-size:11px;color:#92400E;margin-top:1px">Devam etmek için aşağıdan bu müşteriye bir <b>not</b> veya <b>arama kaydı</b> ekleyin.</div></div></div>':''}
   ${panelReadOnly?(panelSalesView?'<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:8px 14px;font-size:11px;color:#1E40AF;margin-bottom:4px">📋 Bu müşteri evrak/randevu aşamasında — statü ve ödeme değiştiremezsiniz, not/arama/belge işlemleri açıktır.</div>':'<div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;padding:8px 14px;font-size:11px;color:#854D0E;margin-bottom:4px">👁 Salt okunur — bu müşteri başka departmanın sorumluluğunda.</div>'):''}
   <div class="ps">
     <div class="ps-head"><div class="ps-title">Müşteri Bilgileri</div></div>
@@ -6071,10 +6109,12 @@ async function addCall(id){
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addCall',customerId:id,callResult:r,callNote:nt,token:CU.token})});
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
+    // "Yeni Data Çek" ile açılmış zorunlu panelin kilidi, bir arama kaydı eklenince açılır.
+    if(id===forcedLeadCustomerId){forcedLeadUnlocked=true;}
     await loadCustomers();
     await openPanel(id);
     refreshCustTable();
-    toast('📞 Arama kaydedildi — '+RLABELS[r],'blue');
+    toast(id===forcedLeadCustomerId?'📞 Arama kaydedildi — artık paneli kapatabilirsiniz':'📞 Arama kaydedildi — '+RLABELS[r],'blue');
   }catch(e){
     toast('Bağlantı hatası','red');
   }
@@ -6094,16 +6134,27 @@ async function saveNote(id){
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'addNote',customerId:id,text,token:CU.token})});
     const d=await res.json();
     if(!d.success){toast('Hata: '+JSON.stringify(d.error||'Kaydedilemedi'),'red');return;}
+    // "Yeni Data Çek" ile açılmış zorunlu panelin kilidi, bir not eklenince açılır.
+    if(id===forcedLeadCustomerId){forcedLeadUnlocked=true;}
     inp.value='';
     await loadCustomers();
     await openPanel(id);
     refreshCustTable();
-    toast('✓ Not kaydedildi','green');
+    toast(id===forcedLeadCustomerId?'✓ Not kaydedildi — artık paneli kapatabilirsiniz':'✓ Not kaydedildi','green');
   }catch(e){
     toast('Bağlantı hatası','red');
   }
 }
-function closePanel(){document.getElementById('overlay').classList.remove('open');document.getElementById('detail-panel').classList.remove('open');}
+function closePanel(){
+  if(forcedLeadCustomerId && !forcedLeadUnlocked){
+    toast('⚠️ Bu müşteriye not veya arama kaydı eklemeden paneli kapatamazsınız','amber');
+    return;
+  }
+  forcedLeadCustomerId=null;
+  forcedLeadUnlocked=false;
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('detail-panel').classList.remove('open');
+}
 async function openModal(){
   try{
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getUsers',token:CU.token})});
