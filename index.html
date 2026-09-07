@@ -492,7 +492,7 @@ if (localStorage.getItem('vizecrm_token')) {
       <div class="fg"><label class="fl2">Hedef Ülke *</label>
         <select class="fi2" id="nm-country"><option value="">— Ülke Seçin —</option><option>🇩🇪 Almanya</option><option>🇬🇧 İngiltere</option><option>🇫🇷 Fransa</option><option>🇮🇹 İtalya</option><option>🇪🇸 İspanya</option><option>🇳🇱 Hollanda</option><option>🇧🇪 Belçika</option><option>🇦🇹 Avusturya</option><option>🇨🇭 İsviçre</option><option>🇵🇹 Portekiz</option><option>🇬🇷 Yunanistan</option><option>🇸🇪 İsveç</option><option>🇳🇴 Norveç</option><option>🇩🇰 Danimarka</option><option>🇵🇱 Polonya</option><option>🇨🇿 Çekya</option><option>🇭🇺 Macaristan</option><option>🇮🇪 İrlanda</option><option>🇫🇮 Finlandiya</option><option>🇷🇴 Romanya</option><option>🇧🇬 Bulgaristan</option><option>🇸🇰 Slovakya</option><option>🇨🇳 Çin</option><option>🇺🇸 Amerika</option></select></div>
       <div class="fg"><label class="fl2">Vize Türü</label>
-        <select class="fi2" id="nm-visa"><option>Schengen Turistik</option><option>Çalışma Vizesi</option><option>Öğrenci Vizesi</option><option>Aile Birleşimi</option></select></div>
+        <select class="fi2" id="nm-visa"><option>Schengen Turistik</option><option>İngiltere Vizesi</option><option>Amerika Vizesi</option><option>Çin Vizesi</option><option>Çalışma Vizesi</option><option>Öğrenci Vizesi</option><option>Aile Birleşimi</option></select></div>
     </div>
     <div class="form-row">
       <div class="fg"><label class="fl2">Satış Temsilcisi</label>
@@ -4430,7 +4430,7 @@ function renderRefunds(){
 // Her şablona isteğe bağlı Ülke/Vize Türü "kodu" atanır — müşteri paneli açıldığında
 // o müşterinin verisine uyan şablonlar otomatik filtrelenip gösterilir.
 const DOC_LIB_COUNTRIES=['🇩🇪 Almanya','🇬🇧 İngiltere','🇫🇷 Fransa','🇮🇹 İtalya','🇪🇸 İspanya','🇳🇱 Hollanda','🇧🇪 Belçika','🇦🇹 Avusturya','🇨🇭 İsviçre','🇵🇹 Portekiz','🇬🇷 Yunanistan','🇸🇪 İsveç','🇳🇴 Norveç','🇩🇰 Danimarka','🇵🇱 Polonya','🇨🇿 Çekya','🇭🇺 Macaristan','🇮🇪 İrlanda','🇫🇮 Finlandiya','🇷🇴 Romanya','🇧🇬 Bulgaristan','🇸🇰 Slovakya','🇨🇳 Çin','🇺🇸 Amerika'];
-const DOC_LIB_VISA_TYPES=['Schengen Turistik','Çalışma Vizesi','Öğrenci Vizesi','Aile Birleşimi'];
+const DOC_LIB_VISA_TYPES=['Schengen Turistik','İngiltere Vizesi','Amerika Vizesi','Çin Vizesi','Çalışma Vizesi','Öğrenci Vizesi','Aile Birleşimi'];
 let docTemplates=[];
 
 async function renderDocLibrary(){
@@ -4439,14 +4439,21 @@ async function renderDocLibrary(){
     <div style="font-size:13px;font-weight:700;color:var(--accent-t);margin-bottom:8px">💡 Bu sayfa ne işe yarar?</div>
     <div style="font-size:12px;color:var(--text2);line-height:1.7">
       Buraya, her müşteriye ayrı ayrı yüklemek yerine <b>bir kere</b> yüklediğiniz genel evraklar (davet mektubu, sigorta bilgi formu vb.) durur.
-      Her evraka <b>hangi müşterilere uygun olduğunu</b> söylüyorsunuz (Ülke ve/veya Vize Türü seçerek). Bir müşterinin panelini açtığınızda,
-      sistem o müşterinin ülkesine/vize türüne uyan evrakları <b>otomatik bulup</b> gösterir — tek tıkla mail atarsınız.
+      Her evraka <b>hangi müşterilere uygun olduğunu</b> söylüyorsunuz. Bir müşterinin panelini açtığınızda,
+      sistem o müşterinin bilgisine uyan evrakları <b>otomatik bulup</b> gösterir — tek tıkla mail atarsınız.
+    </div>
+    <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:9px;padding:12px 14px;margin-top:12px;font-size:12px;color:#92400E;line-height:1.7">
+      <b>⭐ Asıl belirleyici filtre "Vize Türü"dür — Ülke'yi çoğu zaman BOŞ bırakın.</b><br>
+      Çünkü "Schengen" tek bir ülke değil, birçok ülkeyi (Almanya, Fransa, İtalya...) kapsayan bir vize türüdür — o yüzden her Schengen
+      ülkesini tek tek seçmeniz gerekmez. Sadece <b>Vize Türü: Schengen Turistik</b> seçip Ülke'yi boş bırakmanız yeterlidir; sistem bunu
+      otomatik olarak sadece gerçek Schengen ülkelerine uygulayıp İngiltere/Amerika/Çin müşterilerini karıştırmaz — çünkü onların vize
+      türü ayrı (İngiltere Vizesi / Amerika Vizesi / Çin Vizesi).
     </div>
     <div style="background:#fff;border:1px solid #DBEAFE;border-radius:9px;padding:12px 14px;margin-top:12px;font-size:12px;color:var(--text2);line-height:1.8">
-      <b style="color:var(--accent-t)">Örnek:</b><br>
-      • "Almanya Davet Mektubu" evrakını <b>Ülke: 🇩🇪 Almanya</b> olarak eklerseniz → sadece Almanya'ya başvuran müşterilerde görünür.<br>
-      • <b>Ülke ve Vize Türü'nü boş bırakırsanız</b> → o evrak <b>her</b> müşteride görünür (örn. genel bir "Vekaletname Örneği").<br>
-      • Hem Ülke hem Vize Türü seçerseniz → <b>ikisine birden</b> uyan müşterilerde görünür (daha dar/kesin eşleşme).
+      <b style="color:var(--accent-t)">Örnekler:</b><br>
+      • "Schengen Başvuru Formu" → <b>Vize Türü: Schengen Turistik</b>, Ülke boş → tüm Schengen ülkelerine giden müşterilerde görünür (İngiltere/Amerika/Çin'de görünmez).<br>
+      • "Almanya'ya Özel Davet Mektubu" → <b>Ülke: 🇩🇪 Almanya</b> seçin → SADECE Almanya'ya başvuranlarda görünür (Ülke seçmek, Vize Türü'nden bağımsız olarak ek bir daraltma yapar).<br>
+      • "Vekaletname Örneği" (herkese lazım) → Ülke ve Vize Türü'nü de boş bırakın → <b>her</b> müşteride görünür.
     </div>
   </div>
   <div style="margin-bottom:16px"><button class="btn btn-primary" onclick="openAddDocTemplateModal()">+ Şablon Ekle</button></div>
@@ -4506,22 +4513,22 @@ function openAddDocTemplateModal(){
     <div style="font-size:12px;color:var(--text3);margin-bottom:18px">Bu evrakı hangi müşterilerin panelinde görmek istediğinizi aşağıda belirleyin.</div>
 
     <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">1️⃣ Şablon Adı *</label>
-    <input type="text" id="dt-name" class="fi2" placeholder="Örn: Almanya Davet Mektubu Şablonu" style="width:100%;padding:9px;margin-bottom:4px" oninput="updateDocTemplatePreview()">
+    <input type="text" id="dt-name" class="fi2" placeholder="Örn: Schengen Başvuru Formu" style="width:100%;padding:9px;margin-bottom:4px" oninput="updateDocTemplatePreview()">
     <div style="font-size:10px;color:var(--text3);margin-bottom:14px">Bu isim, hem kütüphane listesinde hem de müşteri panelinde görünecek.</div>
 
-    <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">2️⃣ Ülke</label>
-    <select id="dt-country" class="sel" style="width:100%;padding:9px;margin-bottom:4px" onchange="updateDocTemplatePreview()">
-      <option value="">— Tüm Ülkeler (fark etmez) —</option>
-      ${DOC_LIB_COUNTRIES.map(c=>`<option>${c}</option>`).join('')}
-    </select>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:14px">Belirli bir ülke seçerseniz, evrak SADECE o ülkeye başvuran müşterilerde görünür.</div>
-
-    <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">3️⃣ Vize Türü</label>
+    <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">2️⃣ Vize Türü <span style="font-weight:400;color:var(--accent-t)">(⭐ asıl belirleyici filtre budur)</span></label>
     <select id="dt-visa" class="sel" style="width:100%;padding:9px;margin-bottom:4px" onchange="updateDocTemplatePreview()">
       <option value="">— Tüm Vize Türleri (fark etmez) —</option>
       ${DOC_LIB_VISA_TYPES.map(v=>`<option>${v}</option>`).join('')}
     </select>
-    <div style="font-size:10px;color:var(--text3);margin-bottom:14px">Belirli bir tür seçerseniz, evrak SADECE o vize türündeki müşterilerde görünür. Ülke ile birlikte kullanabilirsiniz.</div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:14px">Örn: <b>Schengen Turistik</b> seçerseniz, evrak Almanya/Fransa/İtalya vb. TÜM Schengen ülkelerine giden müşterilerde görünür — tek tek ülke seçmenize gerek yok.</div>
+
+    <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">3️⃣ Ülke <span style="font-weight:400;color:var(--text3)">(sadece TEK bir ülkeye özel evrak için kullanın)</span></label>
+    <select id="dt-country" class="sel" style="width:100%;padding:9px;margin-bottom:4px" onchange="updateDocTemplatePreview()">
+      <option value="">— Tüm Ülkeler (fark etmez) — genelde BOŞ bırakın</option>
+      ${DOC_LIB_COUNTRIES.map(c=>`<option>${c}</option>`).join('')}
+    </select>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:14px">Sadece belirli BİR ülkeye özel bir evrak eklüyorsanız seçin (örn. sadece Almanya'da istenen ek bir form). Genel Schengen evrakları için bunu boş bırakıp yukarıdan Vize Türü seçmeniz yeterlidir.</div>
 
     <div id="dt-preview" style="background:var(--accent-l);border:1px solid #BFDBFE;border-radius:9px;padding:11px 14px;margin-bottom:16px;font-size:12px;color:var(--accent-t);font-weight:600">
       👁 Bu evrak şu an: <b>tüm müşterilerde</b> görünecek
@@ -5325,6 +5332,9 @@ async function openPanel(id, readonly=false){
         </select></div>
         <div class="fi"><div class="fl">Vize Türü</div><select class="fi2" id="ed-visa-${c.id}" style="padding:6px;width:100%" ${panelReadOnly?'disabled':''}>
           <option ${c.visa==='Schengen Turistik'?'selected':''}>Schengen Turistik</option>
+          <option ${c.visa==='İngiltere Vizesi'?'selected':''}>İngiltere Vizesi</option>
+          <option ${c.visa==='Amerika Vizesi'?'selected':''}>Amerika Vizesi</option>
+          <option ${c.visa==='Çin Vizesi'?'selected':''}>Çin Vizesi</option>
           <option ${c.visa==='Çalışma Vizesi'?'selected':''}>Çalışma Vizesi</option>
           <option ${c.visa==='Öğrenci Vizesi'?'selected':''}>Öğrenci Vizesi</option>
           <option ${c.visa==='Aile Birleşimi'?'selected':''}>Aile Birleşimi</option>
