@@ -1247,11 +1247,78 @@ async function loadAnalytics(){
 }
 
 async function renderDash(){
-  document.getElementById('main-content').innerHTML=`<div id="dash-filterbar"></div><div id="dash-body"></div>`;
+  document.getElementById('main-content').innerHTML=`<div id="dash-pending-payments"></div><div id="dash-filterbar"></div><div id="dash-body"></div>`;
   renderDashFilterBar();
   if(!analyticsData) await loadAnalytics();
   renderDashBody();
+  if(CU.role==='management') renderPendingPaymentRequests();
 }
+
+// "Kalan tahsilat bildirildi ama henüz onaylanmadı" taleplerini Dashboard'ın EN ÜSTÜNDE gösterir.
+async function renderPendingPaymentRequests(){
+  const el=document.getElementById('dash-pending-payments');
+  if(!el)return;
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getPendingPaymentRequests',token:CU.token})});
+    const d=await res.json();
+    const list=d.requests||[];
+    window._pendingPaymentRequests=list;
+    if(list.length===0){el.innerHTML='';return;}
+    el.innerHTML=`<div style="background:linear-gradient(135deg,#FFFBEB,#FEF3C7);border:1.5px solid #FBBF24;border-radius:12px;padding:16px 20px;margin-bottom:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:${list.length?'12':'0'}px;flex-wrap:wrap;gap:8px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:20px">💰</span>
+          <div>
+            <div style="font-size:14px;font-weight:800;color:#92400E">Onay Bekleyen Tahsilat Talepleri</div>
+            <div style="font-size:11px;color:#92400E;opacity:.85">Satış temsilcilerinin bildirdiği ödemeler — onaylayana kadar ciroya yansımaz</div>
+          </div>
+        </div>
+        <span style="background:#D97706;color:#fff;font-size:12px;font-weight:800;padding:4px 12px;border-radius:20px">${list.length} bekliyor</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${list.map(r=>{
+          const cust=customers.find(c=>c.id===r.customer_file_number);
+          return `<div style="background:#fff;border:1px solid #FDE68A;border-radius:9px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+            <div style="flex:1;min-width:200px;cursor:pointer" onclick="openPanel('${r.customer_file_number}')">
+              <div style="font-size:13px;font-weight:700;color:var(--text)">${cust?esc(cust.name):r.customer_file_number}</div>
+              <div style="font-size:11px;color:var(--text2);margin-top:2px">${r.requested_by} bildirdi · ${r.payment_date?fmtDate(r.payment_date):'—'}${r.note?' · '+esc(r.note):''}</div>
+            </div>
+            <div style="font-size:15px;font-weight:800;color:#D97706">₺${Number(r.amount).toLocaleString('tr-TR')}</div>
+            <div style="display:flex;gap:6px">
+              <button class="btn btn-success btn-sm" onclick="approvePaymentRequest('${r.id}')">✓ Onayla</button>
+              <button class="btn btn-danger btn-sm" onclick="rejectPaymentRequest('${r.id}')">✕ Reddet</button>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`;
+  }catch(e){ el.innerHTML=''; }
+}
+
+async function approvePaymentRequest(requestId){
+  if(!confirm('Bu tahsilat onaylanacak ve ciroya yansıyacak. Emin misiniz?'))return;
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'approvePaymentCompletion',requestId,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Onaylanamadı'),'red');return;}
+    toast('✓ Tahsilat onaylandı, ciroya yansıdı','green');
+    await loadCustomers();
+    renderPendingPaymentRequests();
+    if(document.getElementById('dash-body'))renderDashBody();
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
+async function rejectPaymentRequest(requestId){
+  if(!confirm('Bu tahsilat talebi reddedilecek. Emin misiniz?'))return;
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'rejectPaymentCompletion',requestId,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Reddedilemedi'),'red');return;}
+    toast('✕ Talep reddedildi','amber');
+    renderPendingPaymentRequests();
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
 
 
 // ---- DASHBOARD FİLTRELERİ (dönem / temsilci / ülke) ----
@@ -2362,9 +2429,15 @@ function renderSoldBody(){
           const paidFull=(c.service_fee>0&&rem===0);
           const apptStr=c.appt_date?('📅 '+fmtDate(c.appt_date)):'—';
           const lastMod=c.last_modified_at?fmtDT(c.last_modified_at):(c.created_at?fmtDT(c.created_at):'—');
+          // "Kaç gündür güncellenmedi" — satışçı sürecin dışında kalsa da, müşteriyle
+          // hâlâ kendisi ilgilenmesi gerektiği için (randevuya kadar iletişim onda) bu bilgiyi görsün.
+          const refDate=c.last_modified_at||c.created_at;
+          const daysSince=refDate?Math.max(0,Math.floor((Date.now()-new Date(refDate).getTime())/86400000)):null;
+          const isStale=daysSince!==null&&daysSince>=7&&c.status!=='Tamamlandı'&&c.status!=='İptal';
+          const staleChip=isStale?`<span style="font-size:9px;font-weight:700;background:var(--red-bg);color:var(--red);border-radius:20px;padding:2px 7px;margin-left:6px">⚠️ ${daysSince}g</span>`:'';
           return `<tr style="opacity:0.92;cursor:pointer" onclick="openPanel('${c.file_number}',true)">
             <td style="font-size:10px;color:var(--text3)">${c.file_number}</td>
-            <td style="font-weight:600;font-size:12px">${c.full_name}</td>
+            <td style="font-weight:600;font-size:12px">${c.full_name}${staleChip}</td>
             <td style="font-size:11px;color:var(--text2)">${c.country||'—'}<br><span style="color:var(--text3)">${c.visa_type||'—'}</span></td>
             <td><span class="badge ${SCLS[c.status]||'b-lead'}">${c.status}</span></td>
             <td style="font-size:11px;color:var(--accent)">${apptStr}</td>
@@ -2372,7 +2445,7 @@ function renderSoldBody(){
               ${paidFull?'✓ Tam':(rem>0?'₺'+rem.toLocaleString('tr-TR'):c.service_fee>0?'✓ Tam':'—')}
             </td>
             <td><span style="font-size:11px;font-weight:600;color:${handlerColor}">${handler}</span></td>
-            <td style="font-size:10px;color:var(--text3)">🕐 ${lastMod}</td>
+            <td style="font-size:10px;color:${isStale?'var(--red)':'var(--text3)'};font-weight:${isStale?'700':'400'}">🕐 ${daysSince!==null?daysSince+' gün önce':lastMod}</td>
           </tr>`;
         }).join('')}
       </tbody>
@@ -5515,6 +5588,18 @@ async function openPanel(id, readonly=false){
     <div class="pay-row"><div class="pay-lbl">Toplam Bedel</div><div class="pay-val">₺${(c.fee||0).toLocaleString('tr-TR')}</div></div>
     <div class="pay-row"><div class="pay-lbl">Ön Ödeme</div><div class="pay-val">₺${(c.prepay||0).toLocaleString('tr-TR')}</div></div>
     <div class="pay-row"><div class="pay-lbl">Kalan</div><div class="pay-val" style="color:${rem>0?'var(--amber)':'var(--green)'}">₺${rem.toLocaleString('tr-TR')}</div></div>
+    ${(panelSalesView&&rem>0)?`
+    <div class="pay-row" style="background:var(--amber-bg);border-left:3px solid var(--amber);flex-direction:column;align-items:stretch;gap:8px">
+      <div style="font-size:12px;font-weight:700;color:var(--amber)">💰 Kalan Tahsilatı Bildir</div>
+      <div style="font-size:10px;color:var(--text2);line-height:1.5">Girdiğiniz tutar DOĞRUDAN ciroya yazılmaz — yöneticinin onayına gönderilir. Onaylandıktan sonra tahsilat kesinleşir.</div>
+      <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+        <input class="fi2" type="number" id="req-pay-amt-${c.id}" placeholder="${rem}" style="padding:6px;width:100px">
+        <span style="font-size:11px;color:var(--text3)">₺</span>
+        <input type="date" id="req-pay-date-${c.id}" class="fi2" style="padding:5px 7px;font-size:11px;width:130px" title="Ödemenin alındığı tarih">
+        <button class="btn btn-amber btn-sm" onclick="requestPaymentCompletion('${c.id}',${rem})">📤 Onaya Gönder</button>
+      </div>
+      <input class="fi2" type="text" id="req-pay-note-${c.id}" placeholder="Not (isteğe bağlı)..." style="padding:6px;font-size:11px">
+    </div>`:''}
     `:`
     <div class="pay-row"><div class="pay-lbl">Toplam Bedel</div><div style="display:flex;align-items:center;gap:8px"><input class="fi2" type="number" id="ed-fee-${c.id}" value="${c.fee}" style="padding:6px;width:100px"><span style="font-size:11px;color:var(--text3)">₺</span></div></div>
     <div class="pay-row"><div class="pay-lbl">Ön Ödeme Alındı</div><div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap"><input class="fi2" type="number" id="ed-prepay-${c.id}" value="${c.prepay}" style="padding:6px;width:100px"><span style="font-size:11px;color:var(--text3)">₺</span><input type="date" id="ed-prepay-date-${c.id}" class="fi2" style="padding:5px 7px;font-size:11px;width:130px" title="Ödemenin alındığı tarih (boş bırakılırsa bugün)"><button class="btn btn-primary btn-sm" onclick="updatePayment('${c.id}')">✓ Kaydet</button></div></div>
@@ -6403,6 +6488,24 @@ async function collectKalan(id, totalFee){
     if(document.getElementById('kanban'))renderPipeline();
   } catch(e){ toast('Bağlantı hatası','red'); }
 }
+
+// Satış temsilcisi "Satışlarım" sayfasından kalan tahsilatı BİLDİRİR — bu DOĞRUDAN ciroya
+// yazılmaz, yöneticinin onayına düşer (bkz. renderPendingPaymentRequests).
+async function requestPaymentCompletion(id, remBalance){
+  const inp=document.getElementById('req-pay-amt-'+id);
+  const amount=parseFloat(inp?.value)||remBalance||0;
+  if(!amount||amount<=0){toast('Tutar giriniz','red');return;}
+  const paymentDate=document.getElementById('req-pay-date-'+id)?.value||'';
+  const note=(document.getElementById('req-pay-note-'+id)?.value||'').trim();
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'requestPaymentCompletion',customerId:id,requestAmt:amount,requestDate:paymentDate||null,requestNote:note,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Gönderilemedi'),'red');return;}
+    toast('📤 '+fmtTL(amount)+' tutarındaki tahsilat yönetici onayına gönderildi','amber');
+    closePanel();
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
 async function addCall(id){
   const r=document.getElementById('cl-r-'+id)?.value,nt=(document.getElementById('cl-n-'+id)?.value||'').trim();
   if(!r)return;
