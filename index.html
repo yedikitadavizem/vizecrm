@@ -1051,7 +1051,7 @@ function renderNavMenu(){
     ${isM?'<button class="nav-item" onclick="showPage(\'completed\')"><span class="nav-icon">✅</span> Tamamlandı'+(completedCount?' <span class="nav-badge">'+completedCount+'</span>':'')+'</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'cancelled\')"><span class="nav-icon">🚫</span> İptal Edilenler'+(cancelledCount?' <span class="nav-badge">'+cancelledCount+'</span>':'')+'</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'notinterested\')"><span class="nav-icon">😐</span> İlgilenmiyor'+(notInterestedCount?' <span class="nav-badge">'+notInterestedCount+'</span>':'')+'</button>':''}
-    ${isM?'<div class="sb-sec">Yönetim</div><button class="nav-item" onclick="showPage(\'muhasebe\')"><span class="nav-icon">💰</span> Muhasebe</button><button class="nav-item" onclick="showPage(\'performance\')"><span class="nav-icon">📊</span> Performans</button><button class="nav-item" onclick="showPage(\'refunds\')"><span class="nav-icon">↩</span> İadeler'+(refundCount?' <span class="nav-badge">'+refundCount+'</span>':'')+'</button><button class="nav-item" onclick="showPage(\'users\')"><span class="nav-icon">🔐</span> Kullanıcılar</button>':''}
+    ${isM?'<div class="sb-sec">Yönetim</div><button class="nav-item" onclick="showPage(\'muhasebe\')"><span class="nav-icon">💰</span> Muhasebe</button><button class="nav-item" onclick="showPage(\'performance\')"><span class="nav-icon">📊</span> Performans</button><button class="nav-item" onclick="showPage(\'doclibrary\')"><span class="nav-icon">📚</span> Belge Kütüphanesi</button><button class="nav-item" onclick="showPage(\'refunds\')"><span class="nav-icon">↩</span> İadeler'+(refundCount?' <span class="nav-badge">'+refundCount+'</span>':'')+'</button><button class="nav-item" onclick="showPage(\'users\')"><span class="nav-icon">🔐</span> Kullanıcılar</button>':''}
   `;
   // Yeniden çizince 'active' sınıfı kaybolur — geri koy
   document.querySelector('[onclick="showPage(\''+aktifSayfa+'\')"]')?.classList.add('active');
@@ -1075,7 +1075,7 @@ async function initApp(){
     <div class="tb-search" id="tb-search-wrap"><span>🔍</span><input placeholder="Müşteri ara..." oninput="gSearch(this.value)"></div>
     <button class="btn btn-primary" onclick="openModal()">+ Yeni Müşteri</button>
   `;
-  const allowedPages=isM?['dashboard','today','customers','pipeline','calendar','visacalendar','consulate','completed','cancelled','notinterested','muhasebe','performance','refunds','users','account']:['today','customers','pipeline','calendar','sold','account'];
+  const allowedPages=isM?['dashboard','today','customers','pipeline','calendar','visacalendar','consulate','completed','cancelled','notinterested','muhasebe','performance','doclibrary','refunds','users','account']:['today','customers','pipeline','calendar','sold','account'];
   const savedPage=localStorage.getItem('vizecrm_lastpage');
   const startPage=(savedPage&&allowedPages.includes(savedPage))?savedPage:(isM?'dashboard':'customers');
   await showPage(startPage);
@@ -1147,7 +1147,7 @@ function goAddMealExpense(){
   });
 }
 
-const PTITLES={dashboard:'Dashboard',today:'Bugün Ne Yapmalıyım',customers:'Müşteriler',pipeline:'Pipeline',calendar:'Takvim',visacalendar:'Vize Takvimi',sold:'Satışlarım',consulate:'Konsolosluk Takibi',completed:'Tamamlandı',cancelled:'İptal Edilenler',notinterested:'İlgilenmiyor',muhasebe:'Muhasebe',performance:'Performans',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
+const PTITLES={dashboard:'Dashboard',today:'Bugün Ne Yapmalıyım',customers:'Müşteriler',pipeline:'Pipeline',calendar:'Takvim',visacalendar:'Vize Takvimi',sold:'Satışlarım',consulate:'Konsolosluk Takibi',completed:'Tamamlandı',cancelled:'İptal Edilenler',notinterested:'İlgilenmiyor',muhasebe:'Muhasebe',performance:'Performans',doclibrary:'Belge Kütüphanesi',refunds:'İadeler',users:'Kullanıcılar',account:'Hesap Ayarları'};
 // Sayfa geçişlerinde YARIŞ KORUMASI:
 // showPage async — veri çekerken (await) kullanıcı başka sayfaya tıklarsa iki showPage
 // aynı anda çalışır. Yavaş olan sonra bitip ekranı ezerse, kullanıcı tıklamadığı sayfayı
@@ -1178,7 +1178,7 @@ async function showPage(p){
   if((p==='dashboard'||p==='muhasebe')&&CU.role==='management') await loadAllPayments();
   if(mySeq!==navSeq) return;
   refreshNavBadges(); // veri tazelendi, kenar çubuğu sayaçları da güncellensin
-  await ({dashboard:renderDash,today:renderToday,customers:renderCusts,pipeline:renderPipeline,calendar:renderCalendar,visacalendar:renderVisaCalendar,sold:renderSold,consulate:renderConsulate,completed:renderCompleted,cancelled:renderCancelled,notinterested:renderNotInterested,muhasebe:renderMuhasebe,performance:renderPerformance,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
+  await ({dashboard:renderDash,today:renderToday,customers:renderCusts,pipeline:renderPipeline,calendar:renderCalendar,visacalendar:renderVisaCalendar,sold:renderSold,consulate:renderConsulate,completed:renderCompleted,cancelled:renderCancelled,notinterested:renderNotInterested,muhasebe:renderMuhasebe,performance:renderPerformance,doclibrary:renderDocLibrary,refunds:renderRefunds,users:renderUsers,account:renderAccount})[p]?.();
 }
 function gSearch(q){
   const sq=q.toLowerCase().trim();
@@ -4424,6 +4424,183 @@ function renderRefunds(){
   </div>`;
 }
 
+// ===== BELGE KÜTÜPHANESİ (ŞABLON EVRAKLAR) =====
+// Müşteriye özel yüklenen dosyalardan farklı: burada genel/şablon evraklar tutulur.
+// Her şablona isteğe bağlı Ülke/Vize Türü "kodu" atanır — müşteri paneli açıldığında
+// o müşterinin verisine uyan şablonlar otomatik filtrelenip gösterilir.
+const DOC_LIB_COUNTRIES=['🇩🇪 Almanya','🇬🇧 İngiltere','🇫🇷 Fransa','🇮🇹 İtalya','🇪🇸 İspanya','🇳🇱 Hollanda','🇧🇪 Belçika','🇦🇹 Avusturya','🇨🇭 İsviçre','🇵🇹 Portekiz','🇬🇷 Yunanistan','🇸🇪 İsveç','🇳🇴 Norveç','🇩🇰 Danimarka','🇵🇱 Polonya','🇨🇿 Çekya','🇭🇺 Macaristan','🇮🇪 İrlanda','🇫🇮 Finlandiya','🇷🇴 Romanya','🇧🇬 Bulgaristan','🇸🇰 Slovakya','🇨🇳 Çin','🇺🇸 Amerika'];
+const DOC_LIB_VISA_TYPES=['Schengen Turistik','Çalışma Vizesi','Öğrenci Vizesi','Aile Birleşimi'];
+let docTemplates=[];
+
+async function renderDocLibrary(){
+  document.getElementById('main-content').innerHTML=`
+  <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Buraya yüklenen şablon evraklar (davet mektubu, sigorta bilgi formu vb.), müşteri panelinde o müşterinin ülke/vize türüne uyanlar otomatik listelenerek tek tıkla e-posta ile gönderilebilir. Ülke veya vize türü boş bırakılırsa şablon <b>tüm müşterilere</b> uygun sayılır.</div>
+  <div style="margin-bottom:16px"><button class="btn btn-primary" onclick="openAddDocTemplateModal()">+ Şablon Ekle</button></div>
+  <div id="doclib-list"><div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div></div>`;
+  await loadDocTemplates();
+  renderDocLibraryList();
+}
+
+async function loadDocTemplates(){
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getDocumentTemplates',token:CU.token})});
+    const d=await res.json();
+    docTemplates=d.templates||[];
+  }catch(e){ docTemplates=[]; }
+}
+
+function renderDocLibraryList(){
+  const el=document.getElementById('doclib-list');
+  if(!el)return;
+  if(docTemplates.length===0){
+    el.innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">Henüz şablon evrak eklenmedi.</div>';
+    return;
+  }
+  el.innerHTML=`<div class="tbl-wrap"><table class="tbl"><thead><tr>
+    <th>Şablon Adı</th><th>Ülke</th><th>Vize Türü</th><th>Açıklama</th><th>Ekleyen</th><th>Tarih</th><th></th>
+  </tr></thead><tbody>
+  ${docTemplates.map(t=>`<tr>
+    <td><b>📄 ${esc(t.name)}</b></td>
+    <td>${t.country?esc(t.country):'<span style="color:var(--text3)">Tüm ülkeler</span>'}</td>
+    <td>${t.visa_type?esc(t.visa_type):'<span style="color:var(--text3)">Tüm türler</span>'}</td>
+    <td style="font-size:11px;color:var(--text2)">${esc(t.description||'—')}</td>
+    <td style="font-size:11px;color:var(--text3)">${esc(t.created_by||'—')}</td>
+    <td style="font-size:11px;color:var(--text3)">${t.created_at?fmtDT(t.created_at):'—'}</td>
+    <td><button class="btn btn-danger btn-sm" onclick="deleteDocTemplate('${t.id}')">🗑 Sil</button></td>
+  </tr>`).join('')}
+  </tbody></table></div>`;
+}
+
+function openAddDocTemplateModal(){
+  const m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:460px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:88vh;overflow:auto">
+    <div style="font-size:16px;font-weight:700;margin-bottom:16px">+ Şablon Evrak Ekle</div>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Şablon Adı *</label>
+    <input type="text" id="dt-name" class="fi2" placeholder="Örn: Almanya Davet Mektubu Şablonu" style="width:100%;padding:9px;margin-bottom:10px">
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Ülke <span style="font-weight:400;color:var(--text3)">(boş = tüm ülkeler)</span></label>
+    <select id="dt-country" class="sel" style="width:100%;padding:9px;margin-bottom:10px">
+      <option value="">— Tüm Ülkeler —</option>
+      ${DOC_LIB_COUNTRIES.map(c=>`<option>${c}</option>`).join('')}
+    </select>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Vize Türü <span style="font-weight:400;color:var(--text3)">(boş = tüm türler)</span></label>
+    <select id="dt-visa" class="sel" style="width:100%;padding:9px;margin-bottom:10px">
+      <option value="">— Tüm Vize Türleri —</option>
+      ${DOC_LIB_VISA_TYPES.map(v=>`<option>${v}</option>`).join('')}
+    </select>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Açıklama</label>
+    <input type="text" id="dt-desc" class="fi2" placeholder="İsteğe bağlı kısa açıklama..." style="width:100%;padding:9px;margin-bottom:10px">
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Dosya *</label>
+    <input type="file" id="dt-file" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx" style="width:100%;padding:8px;margin-bottom:16px;font-size:12px">
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="this.closest('div[style*=fixed]').remove()">Vazgeç</button>
+      <button class="btn btn-primary" style="flex:1" id="dt-save-btn" onclick="saveDocTemplate(this)">✓ Kaydet</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+async function saveDocTemplate(btn){
+  const name=(document.getElementById('dt-name')?.value||'').trim();
+  const country=document.getElementById('dt-country')?.value||'';
+  const visaType=document.getElementById('dt-visa')?.value||'';
+  const desc=(document.getElementById('dt-desc')?.value||'').trim();
+  const fileInput=document.getElementById('dt-file');
+  const file=fileInput?.files[0];
+  if(!name){toast('Şablon adı zorunludur','red');return;}
+  if(!file){toast('Dosya seçiniz','red');return;}
+  if(file.size>10*1024*1024){toast("Dosya 10MB'dan büyük olamaz",'red');return;}
+  btn.disabled=true;btn.textContent='Yükleniyor...';
+  try{
+    const reader=new FileReader();
+    reader.onload=async(e)=>{
+      const base64=e.target.result;
+      const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+        action:'uploadDocumentTemplate',docTemplateName:name,docTemplateCountry:country,docTemplateVisaType:visaType,docTemplateDesc:desc,
+        fileName:file.name,fileData:base64,fileType:file.type,token:CU.token
+      })});
+      const d=await res.json();
+      if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Kaydedilemedi'),'red');btn.disabled=false;btn.textContent='✓ Kaydet';return;}
+      document.querySelector('div[style*="fixed"]')?.remove();
+      toast('✓ Şablon eklendi','green');
+      await loadDocTemplates();
+      renderDocLibraryList();
+    };
+    reader.readAsDataURL(file);
+  }catch(e){toast('Bağlantı hatası','red');btn.disabled=false;btn.textContent='✓ Kaydet';}
+}
+
+async function deleteDocTemplate(id){
+  if(!confirm('Bu şablon evrakı silmek istediğinize emin misiniz?'))return;
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'deleteDocumentTemplate',templateId:id,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Silinemedi','red');return;}
+    toast('🗑 Şablon silindi','amber');
+    await loadDocTemplates();
+    renderDocLibraryList();
+  }catch(e){toast('Bağlantı hatası','red');}
+}
+
+// ── Müşteri panelinde: bu müşteriye uyan şablonları getirip listeler ──
+async function renderMatchingTemplatesPanel(custId){
+  const holder=document.getElementById('doclib-match-'+custId);
+  if(!holder)return;
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getDocumentTemplates',customerId:custId,token:CU.token})});
+    const d=await res.json();
+    const list=d.templates||[];
+    if(list.length===0){
+      holder.innerHTML='<div style="font-size:12px;color:var(--text3);padding:4px 0">Bu müşterinin ülke/vize türüne uyan bir şablon yok.</div>';
+      return;
+    }
+    holder.innerHTML=list.map(t=>`
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:7px;border:1px solid var(--border);margin-bottom:6px;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;font-weight:600;color:var(--text)">📄 ${esc(t.name)}</div>
+          <div style="font-size:10px;color:var(--text3)">${t.country?esc(t.country):'Tüm ülkeler'} · ${t.visa_type?esc(t.visa_type):'Tüm türler'}</div>
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="openSendTemplateEmailModal('${custId}','${t.id}','${esc(t.name).replace(/'/g,"\\'")}')">📧 Gönder</button>
+      </div>`).join('');
+  }catch(e){
+    holder.innerHTML='<div style="font-size:12px;color:var(--text3)">Şablonlar yüklenemedi.</div>';
+  }
+}
+
+function openSendTemplateEmailModal(custId, templateId, templateName){
+  const cust=customers.find(c=>c.id===custId);
+  const email=cust?.email||'';
+  if(!email){toast('Bu müşterinin kayıtlı e-posta adresi yok','red');return;}
+  const m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:10100;padding:20px';
+  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px">📧 Şablon Belge Gönder</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px">
+      <b>${esc(templateName)}</b> şablonu<br>
+      <span style="color:var(--accent)">${esc(email)}</span> adresine ek olarak gönderilecek.
+    </div>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Kısa not (isteğe bağlı)</label>
+    <textarea id="ste-note" class="fi2" rows="3" placeholder="Mail içine eklenecek kısa açıklama..." style="width:100%;padding:9px;margin-bottom:16px"></textarea>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="this.closest('div[style*=fixed]').remove()">Vazgeç</button>
+      <button class="btn btn-primary" style="flex:1" id="ste-send-btn" onclick="sendTemplateEmailConfirmed('${custId}','${templateId}',this)">✓ Gönder</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+async function sendTemplateEmailConfirmed(custId, templateId, btn){
+  const note=(document.getElementById('ste-note')?.value||'').trim();
+  btn.disabled=true;btn.textContent='Gönderiliyor...';
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sendTemplateEmail',customerId:custId,templateId,text:note,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Gönderilemedi'),'red');btn.disabled=false;btn.textContent='✓ Gönder';return;}
+    document.querySelector('div[style*="fixed"]')?.remove();
+    toast('📧 Şablon belge e-posta ile gönderildi','green');
+  }catch(e){toast('Bağlantı hatası','red');btn.disabled=false;btn.textContent='✓ Gönder';}
+}
+
 // USERS
 const ROLE_OPTS=[['management','👑 Yönetici'],['sales','💼 Satış'],['evrak','📄 Evrak'],['randevu','📅 Randevu']];
 const ROLE_OPTS_LIMITED=[['sales','💼 Satış'],['evrak','📄 Evrak'],['randevu','📅 Randevu']];
@@ -5348,6 +5525,13 @@ async function openPanel(id, readonly=false){
     </div>`:''}  
   </div>
 
+  <div class="ps">
+    <div class="ps-head"><div class="ps-title">📚 Uyumlu Şablon Belgeler</div></div>
+    <div class="ps-body" id="doclib-match-${c.id}">
+      <div style="font-size:12px;color:var(--text3)">Yükleniyor...</div>
+    </div>
+  </div>
+
   ${renderReminderPanel(c, panelReadOnly)}
 
   <div class="ps" id="cl-${c.id}">
@@ -5498,8 +5682,9 @@ async function openPanel(id, readonly=false){
   </div>`:''}
   `}
   `;
-  // Dosyaları arka planda yükle
+  // Dosyaları ve uyumlu şablon belgeleri arka planda yükle
   loadFiles(c.id);
+  renderMatchingTemplatesPanel(c.id);
 }
 
 async function loadFiles(customerId){
@@ -5518,7 +5703,11 @@ async function loadFiles(customerId){
     function fmtSize(b){if(b<1024)return b+'B';if(b<1048576)return (b/1024).toFixed(1)+'KB';return (b/1048576).toFixed(1)+'MB';}
     function fmtFileName(n){const parts=n.split('_');return parts.length>1?parts.slice(1).join('_'):n;}
     const canDelete=CU.role==='management'||CU.role==='evrak'||CU.role==='randevu'||(CU.role==='sales');
-    listEl.innerHTML=files.map(f=>`
+    const custEmail=(customers.find(c=>c.id===customerId)||{}).email||'';
+    listEl.innerHTML=files.map(f=>{
+      const tooBig=f.size>10*1024*1024;
+      const mailTitle=tooBig?"Dosya 10MB'dan büyük, e-posta eki olarak gönderilemez":(custEmail?'Bu dosyayı '+custEmail+' adresine e-posta eki olarak gönder':'Müşterinin kayıtlı e-posta adresi yok');
+      return `
       <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface2);border-radius:7px;border:1px solid var(--border);gap:8px">
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">📎 ${fmtFileName(f.name)}</div>
@@ -5526,12 +5715,49 @@ async function loadFiles(customerId){
         </div>
         <div style="display:flex;gap:6px;flex-shrink:0">
           <a href="${f.url}" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration:none">⬇ İndir</a>
+          <button class="btn btn-ghost btn-sm" title="${mailTitle}" ${(tooBig||!custEmail)?'disabled style="opacity:.4;cursor:not-allowed"':''} onclick="openSendFileEmailModal('${customerId}','${f.name}','${fmtFileName(f.name).replace(/'/g,"\\'")}')">📧 Mail</button>
           ${canDelete?`<button class="btn btn-danger btn-sm" onclick="deleteFile('${customerId}','${f.name}')">✕</button>`:''}
         </div>
-      </div>`).join('');
+      </div>`;}).join('');
   }catch(e){
     if(listEl)listEl.innerHTML='<div style="font-size:12px;color:var(--text3)">Dosyalar yüklenemedi.</div>';
   }
+}
+
+// Bir belgeyi müşterinin kayıtlı e-posta adresine ek (attachment) olarak göndermeden önce
+// onay ve isteğe bağlı kısa bir not girme penceresi açar.
+function openSendFileEmailModal(customerId, fileName, displayName){
+  const cust=customers.find(c=>c.id===customerId);
+  const email=cust?.email||'';
+  if(!email){toast('Bu müşterinin kayıtlı e-posta adresi yok','red');return;}
+  const m=document.createElement('div');
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:10100;padding:20px';
+  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:420px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3)">
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px">📧 Belgeyi Mail Olarak Gönder</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px">
+      <b>${esc(displayName)}</b> dosyası<br>
+      <span style="color:var(--accent)">${esc(email)}</span> adresine ek olarak gönderilecek.
+    </div>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Kısa not (isteğe bağlı)</label>
+    <textarea id="sfe-note" class="fi2" rows="3" placeholder="Mail içine eklenecek kısa açıklama..." style="width:100%;padding:9px;margin-bottom:16px"></textarea>
+    <div style="display:flex;gap:8px">
+      <button class="btn btn-ghost" style="flex:1" onclick="this.closest('div[style*=fixed]').remove()">Vazgeç</button>
+      <button class="btn btn-primary" style="flex:1" id="sfe-send-btn" onclick="sendFileEmailConfirmed('${customerId}','${fileName}',this)">✓ Gönder</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+async function sendFileEmailConfirmed(customerId, fileName, btn){
+  const note=(document.getElementById('sfe-note')?.value||'').trim();
+  btn.disabled=true;btn.textContent='Gönderiliyor...';
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'sendFileEmail',customerId,fileName,text:note,token:CU.token})});
+    const d=await res.json();
+    if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Gönderilemedi'),'red');btn.disabled=false;btn.textContent='✓ Gönder';return;}
+    document.querySelector('div[style*="fixed"]')?.remove();
+    toast('📧 Belge e-posta ile gönderildi','green');
+  }catch(e){toast('Bağlantı hatası','red');btn.disabled=false;btn.textContent='✓ Gönder';}
 }
 
 async function uploadFile(customerId, input){
