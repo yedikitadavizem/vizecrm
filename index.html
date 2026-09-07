@@ -1046,7 +1046,7 @@ function renderNavMenu(){
     <button class="nav-item" onclick="showPage(\'pipeline\')"><span class="nav-icon">🗂</span> Pipeline</button>
     <button class="nav-item" onclick="showPage(\'calendar\')"><span class="nav-icon">📅</span> Takvim</button>
     ${!isM?'<button class="nav-item" onclick="showPage(\'sold\')"><span class="nav-icon">📈</span> Satışlarım</button>':''}
-    ${isM?'<button class="nav-item" onclick="showPage(\'consulate\')"><span class="nav-icon">🛂</span> Konsolosluk Takibi</button>':''}
+    ${(isM||CU.role==='evrak')?'<button class="nav-item" onclick="showPage(\'consulate\')"><span class="nav-icon">🛂</span> Konsolosluk Takibi</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'visacalendar\')"><span class="nav-icon">🗓️</span> Vize Takvimi</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'completed\')"><span class="nav-icon">✅</span> Tamamlandı'+(completedCount?' <span class="nav-badge">'+completedCount+'</span>':'')+'</button>':''}
     ${isM?'<button class="nav-item" onclick="showPage(\'cancelled\')"><span class="nav-icon">🚫</span> İptal Edilenler'+(cancelledCount?' <span class="nav-badge">'+cancelledCount+'</span>':'')+'</button>':''}
@@ -1075,7 +1075,10 @@ async function initApp(){
     <div class="tb-search" id="tb-search-wrap"><span>🔍</span><input placeholder="Müşteri ara..." oninput="gSearch(this.value)"></div>
     <button class="btn btn-primary" onclick="openModal()">+ Yeni Müşteri</button>
   `;
-  const allowedPages=isM?['dashboard','today','customers','pipeline','calendar','visacalendar','consulate','completed','cancelled','notinterested','muhasebe','performance','doclibrary','refunds','users','account']:['today','customers','pipeline','calendar','sold','account'];
+  const nonMgmtBase=['today','customers','pipeline','calendar','sold','account'];
+  const allowedPages=isM
+    ?['dashboard','today','customers','pipeline','calendar','visacalendar','consulate','completed','cancelled','notinterested','muhasebe','performance','doclibrary','refunds','users','account']
+    :(CU.role==='evrak' ? [...nonMgmtBase,'consulate'] : nonMgmtBase);
   const savedPage=localStorage.getItem('vizecrm_lastpage');
   const startPage=(savedPage&&allowedPages.includes(savedPage))?savedPage:(isM?'dashboard':'customers');
   await showPage(startPage);
@@ -2855,7 +2858,7 @@ function renderConsulate(){
     <div style="overflow-x:auto">
     <table class="tbl" style="min-width:920px" id="cons-table">
       <thead><tr>
-        <th>Dosya No</th><th>Ad Soyad</th><th>Telefon</th><th>Ülke</th><th>Aşama</th><th>Süreç Boyunca Sorumlular</th><th>Bekleme Süresi</th>${CU.role==='management'?'<th>Vize Sonucu</th>':''}
+        <th>Dosya No</th><th>Ad Soyad</th><th>Telefon</th><th>Ülke</th><th>Aşama</th><th>Süreç Boyunca Sorumlular</th><th>Bekleme Süresi</th>${(CU.role==='management'||CU.role==='evrak')?'<th>Vize Sonucu</th>':''}
       </tr></thead>
       <tbody>
         ${list.map(c=>{
@@ -2889,7 +2892,7 @@ function renderConsulate(){
                 <input type="date" id="ve-${c.id}" class="fi2" value="${c.visaEndDate||''}" style="padding:3px 6px;font-size:11px;width:120px" placeholder="Bitiş">
               </div>
               <button class="btn btn-primary btn-sm" style="font-size:10px;padding:3px 8px;margin-top:2px" onclick="saveVisaResult('${c.id}')">✓ Kaydet</button>
-            </div></td>`:''}</tr>`;
+            </div></td>`:CU.role==='evrak'?`<td onclick="event.stopPropagation()">${visaBadge}</td>`:''}</tr>`;
         }).join('')}
       </tbody>
     </table>
@@ -5308,7 +5311,7 @@ async function openPanel(id, readonly=false){
 
   const ROLE_QBTNS={
     sales:['Sonra Ara','Ulaşılamıyor','İlgileniyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı'],
-    evrak:['Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı'],
+    evrak:['Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı'],
     randevu:['Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'],
     management:['Sonra Ara','Ulaşılamıyor','İlgileniyor','İlgilenmiyor','İletişime Geçildi','Ödeme Alındı','Belge Bekleniyor','Belgeler Tamam','Randevu Aranıyor','Randevu Alındı','Randevu Evrakları Hazırlanıyor','Randevu Evrakları Tamamlandı','Başvuru Yapıldı','Sonuç Bekleniyor','Tamamlandı','İptal'],
   };
