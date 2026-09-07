@@ -1250,6 +1250,7 @@ async function renderDash(){
   renderDashBody();
 }
 
+
 // ---- DASHBOARD FİLTRELERİ (dönem / temsilci / ülke) ----
 let dashPeriod='all', dashRep='', dashCountry='', dashDateFrom='', dashDateTo='';
 const DASH_PERIODS=[['all','Tüm Zamanlar'],['today','Bugün'],['week','Bu Hafta'],['month','Bu Ay'],['quarter','Bu Çeyrek'],['year','Bu Yıl'],...[["2026-01","Ocak 2026"],["2026-02","Şubat 2026"],["2026-03","Mart 2026"],["2026-04","Nisan 2026"],["2026-05","Mayıs 2026"],["2026-06","Haziran 2026"],["2026-07","Temmuz 2026"],["2026-08","Ağustos 2026"],["2026-09","Eylül 2026"],["2026-10","Ekim 2026"],["2026-11","Kasım 2026"],["2026-12","Aralık 2026"]]];
@@ -4434,7 +4435,20 @@ let docTemplates=[];
 
 async function renderDocLibrary(){
   document.getElementById('main-content').innerHTML=`
-  <div style="font-size:12px;color:var(--text2);margin-bottom:14px">Buraya yüklenen şablon evraklar (davet mektubu, sigorta bilgi formu vb.), müşteri panelinde o müşterinin ülke/vize türüne uyanlar otomatik listelenerek tek tıkla e-posta ile gönderilebilir. Ülke veya vize türü boş bırakılırsa şablon <b>tüm müşterilere</b> uygun sayılır.</div>
+  <div style="background:var(--accent-l);border:1px solid #BFDBFE;border-radius:12px;padding:16px 20px;margin-bottom:18px">
+    <div style="font-size:13px;font-weight:700;color:var(--accent-t);margin-bottom:8px">💡 Bu sayfa ne işe yarar?</div>
+    <div style="font-size:12px;color:var(--text2);line-height:1.7">
+      Buraya, her müşteriye ayrı ayrı yüklemek yerine <b>bir kere</b> yüklediğiniz genel evraklar (davet mektubu, sigorta bilgi formu vb.) durur.
+      Her evraka <b>hangi müşterilere uygun olduğunu</b> söylüyorsunuz (Ülke ve/veya Vize Türü seçerek). Bir müşterinin panelini açtığınızda,
+      sistem o müşterinin ülkesine/vize türüne uyan evrakları <b>otomatik bulup</b> gösterir — tek tıkla mail atarsınız.
+    </div>
+    <div style="background:#fff;border:1px solid #DBEAFE;border-radius:9px;padding:12px 14px;margin-top:12px;font-size:12px;color:var(--text2);line-height:1.8">
+      <b style="color:var(--accent-t)">Örnek:</b><br>
+      • "Almanya Davet Mektubu" evrakını <b>Ülke: 🇩🇪 Almanya</b> olarak eklerseniz → sadece Almanya'ya başvuran müşterilerde görünür.<br>
+      • <b>Ülke ve Vize Türü'nü boş bırakırsanız</b> → o evrak <b>her</b> müşteride görünür (örn. genel bir "Vekaletname Örneği").<br>
+      • Hem Ülke hem Vize Türü seçerseniz → <b>ikisine birden</b> uyan müşterilerde görünür (daha dar/kesin eşleşme).
+    </div>
+  </div>
   <div style="margin-bottom:16px"><button class="btn btn-primary" onclick="openAddDocTemplateModal()">+ Şablon Ekle</button></div>
   <div id="doclib-list"><div style="padding:40px;text-align:center;color:var(--text3)">Yükleniyor...</div></div>`;
   await loadDocTemplates();
@@ -4453,51 +4467,99 @@ function renderDocLibraryList(){
   const el=document.getElementById('doclib-list');
   if(!el)return;
   if(docTemplates.length===0){
-    el.innerHTML='<div style="padding:40px;text-align:center;color:var(--text3)">Henüz şablon evrak eklenmedi.</div>';
+    el.innerHTML=`<div style="padding:48px;text-align:center;color:var(--text3)">
+      <div style="font-size:32px;margin-bottom:10px">📂</div>
+      <div style="font-size:13px">Henüz şablon evrak eklenmedi.</div>
+      <div style="font-size:12px;margin-top:4px">Yukarıdaki "+ Şablon Ekle" ile ilk evrakınızı yükleyebilirsiniz.</div>
+    </div>`;
     return;
   }
-  el.innerHTML=`<div class="tbl-wrap"><table class="tbl"><thead><tr>
-    <th>Şablon Adı</th><th>Ülke</th><th>Vize Türü</th><th>Açıklama</th><th>Ekleyen</th><th>Tarih</th><th></th>
-  </tr></thead><tbody>
-  ${docTemplates.map(t=>`<tr>
-    <td><b>📄 ${esc(t.name)}</b></td>
-    <td>${t.country?esc(t.country):'<span style="color:var(--text3)">Tüm ülkeler</span>'}</td>
-    <td>${t.visa_type?esc(t.visa_type):'<span style="color:var(--text3)">Tüm türler</span>'}</td>
-    <td style="font-size:11px;color:var(--text2)">${esc(t.description||'—')}</td>
-    <td style="font-size:11px;color:var(--text3)">${esc(t.created_by||'—')}</td>
-    <td style="font-size:11px;color:var(--text3)">${t.created_at?fmtDT(t.created_at):'—'}</td>
-    <td><button class="btn btn-danger btn-sm" onclick="deleteDocTemplate('${t.id}')">🗑 Sil</button></td>
-  </tr>`).join('')}
-  </tbody></table></div>`;
+  el.innerHTML=docTemplates.map(t=>{
+    // "Kapsam" özeti — bu şablonun tam olarak hangi müşterilerde görüneceğini TEK bakışta anlatır.
+    let scopeLabel, scopeColor, scopeBg;
+    if(!t.country && !t.visa_type){
+      scopeLabel='🌍 Herkese uygun'; scopeColor='#059669'; scopeBg='#ECFDF5';
+    }else if(t.country && t.visa_type){
+      scopeLabel=`${esc(t.country)} + ${esc(t.visa_type)}`; scopeColor='#7C3AED'; scopeBg='#F5F3FF';
+    }else if(t.country){
+      scopeLabel=`${esc(t.country)} (her vize türü)`; scopeColor='#2563EB'; scopeBg='#EFF6FF';
+    }else{
+      scopeLabel=`${esc(t.visa_type)} (her ülke)`; scopeColor='#D97706'; scopeBg='#FFFBEB';
+    }
+    return `<div style="background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;margin-bottom:10px;display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap">
+      <div style="flex:1;min-width:220px">
+        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px">📄 ${esc(t.name)}</div>
+        <span style="display:inline-block;font-size:11px;font-weight:700;padding:4px 11px;border-radius:20px;background:${scopeBg};color:${scopeColor};margin-bottom:6px">${scopeLabel}</span>
+        ${t.description?`<div style="font-size:12px;color:var(--text2);margin-top:4px">${esc(t.description)}</div>`:''}
+        <div style="font-size:10px;color:var(--text3);margin-top:8px">Ekleyen: ${esc(t.created_by||'—')} · ${t.created_at?fmtDT(t.created_at):'—'}</div>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="deleteDocTemplate('${t.id}')">🗑 Sil</button>
+    </div>`;
+  }).join('');
 }
 
 function openAddDocTemplateModal(){
   const m=document.createElement('div');
   m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
-  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:460px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:88vh;overflow:auto">
-    <div style="font-size:16px;font-weight:700;margin-bottom:16px">+ Şablon Evrak Ekle</div>
-    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Şablon Adı *</label>
-    <input type="text" id="dt-name" class="fi2" placeholder="Örn: Almanya Davet Mektubu Şablonu" style="width:100%;padding:9px;margin-bottom:10px">
-    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Ülke <span style="font-weight:400;color:var(--text3)">(boş = tüm ülkeler)</span></label>
-    <select id="dt-country" class="sel" style="width:100%;padding:9px;margin-bottom:10px">
-      <option value="">— Tüm Ülkeler —</option>
+  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:480px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:90vh;overflow:auto">
+    <div style="font-size:16px;font-weight:700;margin-bottom:4px">+ Şablon Evrak Ekle</div>
+    <div style="font-size:12px;color:var(--text3);margin-bottom:18px">Bu evrakı hangi müşterilerin panelinde görmek istediğinizi aşağıda belirleyin.</div>
+
+    <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">1️⃣ Şablon Adı *</label>
+    <input type="text" id="dt-name" class="fi2" placeholder="Örn: Almanya Davet Mektubu Şablonu" style="width:100%;padding:9px;margin-bottom:4px" oninput="updateDocTemplatePreview()">
+    <div style="font-size:10px;color:var(--text3);margin-bottom:14px">Bu isim, hem kütüphane listesinde hem de müşteri panelinde görünecek.</div>
+
+    <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">2️⃣ Ülke</label>
+    <select id="dt-country" class="sel" style="width:100%;padding:9px;margin-bottom:4px" onchange="updateDocTemplatePreview()">
+      <option value="">— Tüm Ülkeler (fark etmez) —</option>
       ${DOC_LIB_COUNTRIES.map(c=>`<option>${c}</option>`).join('')}
     </select>
-    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Vize Türü <span style="font-weight:400;color:var(--text3)">(boş = tüm türler)</span></label>
-    <select id="dt-visa" class="sel" style="width:100%;padding:9px;margin-bottom:10px">
-      <option value="">— Tüm Vize Türleri —</option>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:14px">Belirli bir ülke seçerseniz, evrak SADECE o ülkeye başvuran müşterilerde görünür.</div>
+
+    <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">3️⃣ Vize Türü</label>
+    <select id="dt-visa" class="sel" style="width:100%;padding:9px;margin-bottom:4px" onchange="updateDocTemplatePreview()">
+      <option value="">— Tüm Vize Türleri (fark etmez) —</option>
       ${DOC_LIB_VISA_TYPES.map(v=>`<option>${v}</option>`).join('')}
     </select>
-    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Açıklama</label>
-    <input type="text" id="dt-desc" class="fi2" placeholder="İsteğe bağlı kısa açıklama..." style="width:100%;padding:9px;margin-bottom:10px">
-    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Dosya *</label>
-    <input type="file" id="dt-file" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx" style="width:100%;padding:8px;margin-bottom:16px;font-size:12px">
+    <div style="font-size:10px;color:var(--text3);margin-bottom:14px">Belirli bir tür seçerseniz, evrak SADECE o vize türündeki müşterilerde görünür. Ülke ile birlikte kullanabilirsiniz.</div>
+
+    <div id="dt-preview" style="background:var(--accent-l);border:1px solid #BFDBFE;border-radius:9px;padding:11px 14px;margin-bottom:16px;font-size:12px;color:var(--accent-t);font-weight:600">
+      👁 Bu evrak şu an: <b>tüm müşterilerde</b> görünecek
+    </div>
+
+    <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">4️⃣ Açıklama <span style="font-weight:400;color:var(--text3)">(isteğe bağlı)</span></label>
+    <input type="text" id="dt-desc" class="fi2" placeholder="Örn: PDF, doldurup imzalanmalı" style="width:100%;padding:9px;margin-bottom:14px">
+
+    <label style="font-size:11px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px">5️⃣ Dosya *</label>
+    <input type="file" id="dt-file" accept=".jpg,.jpeg,.png,.webp,.pdf,.doc,.docx" style="width:100%;padding:8px;margin-bottom:4px;font-size:12px">
+    <div style="font-size:10px;color:var(--text3);margin-bottom:16px">JPG, PNG, PDF, DOC, DOCX · Max 10MB — müşteriye mail atıldığında ek olarak bu dosya gider.</div>
+
     <div style="display:flex;gap:8px">
       <button class="btn btn-ghost" style="flex:1" onclick="this.closest('div[style*=fixed]').remove()">Vazgeç</button>
       <button class="btn btn-primary" style="flex:1" id="dt-save-btn" onclick="saveDocTemplate(this)">✓ Kaydet</button>
     </div>
   </div>`;
   document.body.appendChild(m);
+}
+
+// Kullanıcı Ülke/Vize Türü seçerken, "bu evrak kime görünecek" cümlesini anında günceller —
+// böylece kaydetmeden önce ne yaptığını net görür.
+function updateDocTemplatePreview(){
+  const country=document.getElementById('dt-country')?.value||'';
+  const visa=document.getElementById('dt-visa')?.value||'';
+  const el=document.getElementById('dt-preview');
+  if(!el)return;
+  let msg;
+  if(!country && !visa){
+    msg='👁 Bu evrak şu an: <b>tüm müşterilerde</b> görünecek';
+  }else if(country && visa){
+    msg=`👁 Bu evrak şu an: SADECE <b>${esc(country)}</b> + <b>${esc(visa)}</b> olan müşterilerde görünecek`;
+  }else if(country){
+    msg=`👁 Bu evrak şu an: <b>${esc(country)}</b>'a başvuran (vize türü fark etmez) müşterilerde görünecek`;
+  }else{
+    msg=`👁 Bu evrak şu an: <b>${esc(visa)}</b> vizesi olan (ülke fark etmez) müşterilerde görünecek`;
+  }
+  el.innerHTML=msg;
 }
 
 async function saveDocTemplate(btn){
@@ -4551,7 +4613,7 @@ async function renderMatchingTemplatesPanel(custId){
     const d=await res.json();
     const list=d.templates||[];
     if(list.length===0){
-      holder.innerHTML='<div style="font-size:12px;color:var(--text3);padding:4px 0">Bu müşterinin ülke/vize türüne uyan bir şablon yok.</div>';
+      holder.innerHTML=`<div style="font-size:12px;color:var(--text3);padding:4px 0">Bu müşterinin ülke/vize türüne uyan bir şablon yok. <a href="#" onclick="showPage('doclibrary');return false" style="color:var(--accent)">Belge Kütüphanesi'nden ekleyebilirsiniz →</a></div>`;
       return;
     }
     holder.innerHTML=list.map(t=>`
