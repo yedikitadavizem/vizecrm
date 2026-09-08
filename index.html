@@ -3187,7 +3187,7 @@ async function renderPerformance(){
     const s=Math.floor(dkOfDay/60), m=dkOfDay%60;
     return String(s).padStart(2,'0')+':'+String(m).padStart(2,'0');
   }
-  const TIP_KISA={asama_degisikligi:'Aşama',not_ekleme:'Not',arama_kaydi:'Arama',odeme_degisikligi:'Ödeme',fatura_durumu:'Fatura',odeme_kaydi_duzenleme:'Ödeme Düz.',musteri_gideri_duzenleme:'Gider',genel_gider_duzenleme:'Gider',musteri_silme:'Silme',sifre_sifirlama:'Şifre'};
+  const TIP_KISA={asama_degisikligi:'Aşama',not_ekleme:'Not',arama_kaydi:'Arama',odeme_degisikligi:'Ödeme',fatura_durumu:'Fatura',odeme_kaydi_duzenleme:'Ödeme Düz.',musteri_gideri_duzenleme:'Gider',genel_gider_duzenleme:'Gider',musteri_silme:'Silme',sifre_sifirlama:'Şifre',musteri_ekleme:'Yeni Müşteri',refakatci_ekleme:'Refakatçi',belge_durumu:'Belge',basvuru_ekleme:'Başvuru',randevu_tarihi:'Randevu Tarihi',dosya_yukleme:'Dosya',musteri_bilgisi_duzenleme:'Bilgi Düz.',tahsilat_talebi:'Tahsilat Talebi',tahsilat_talebi_onay:'Tahsilat Onay',tahsilat_talebi_red:'Tahsilat Red',lead_cekildi:'Lead Çekme',personel_transferi:'Transfer',dosya_mail_gonderimi:'Dosya Maili',sablon_mail_gonderimi:'Şablon Maili'};
 
   document.getElementById('main-content').innerHTML=`
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;margin-bottom:16px">
@@ -4782,8 +4782,8 @@ async function showAuditLog(){
     logs=d.logs||[];
   }catch(e){m.querySelector('div>div').innerHTML='<div style="padding:40px;text-align:center;color:var(--red)">Bağlantı hatası.</div>';return;}
 
-  const TIP_ETIKET={odeme_degisikligi:'💰 Ödeme Değişikliği',fatura_durumu:'📄 Fatura Durumu',odeme_kaydi_duzenleme:'💵 Ödeme Kaydı Düzenleme',musteri_gideri_duzenleme:'💸 Müşteri Gideri',genel_gider_duzenleme:'🧾 Genel Gider',sifre_sifirlama:'🔑 Şifre Sıfırlama',musteri_silme:'🗑️ Müşteri Silme'};
-  const TIP_RENK={odeme_degisikligi:'#2563EB',fatura_durumu:'#7C3AED',odeme_kaydi_duzenleme:'#059669',musteri_gideri_duzenleme:'#DC2626',genel_gider_duzenleme:'#D97706',sifre_sifirlama:'#DB2777',musteri_silme:'#DC2626'};
+  const TIP_ETIKET={odeme_degisikligi:'💰 Ödeme Değişikliği',fatura_durumu:'📄 Fatura Durumu',odeme_kaydi_duzenleme:'💵 Ödeme Kaydı Düzenleme',musteri_gideri_duzenleme:'💸 Müşteri Gideri',genel_gider_duzenleme:'🧾 Genel Gider',sifre_sifirlama:'🔑 Şifre Sıfırlama',musteri_silme:'🗑️ Müşteri Silme',musteri_ekleme:'👥 Yeni Müşteri',refakatci_ekleme:'👨‍👩‍👧 Refakatçi Ekleme',belge_durumu:'📋 Belge Durumu',basvuru_ekleme:'🌍 Başvuru Ekleme',randevu_tarihi:'📅 Randevu Tarihi',dosya_yukleme:'📎 Dosya Yükleme',musteri_bilgisi_duzenleme:'✏️ Müşteri Bilgisi',tahsilat_talebi:'📤 Tahsilat Talebi',tahsilat_talebi_onay:'✅ Tahsilat Onayı',tahsilat_talebi_red:'❌ Tahsilat Reddi',lead_cekildi:'📥 Lead Çekme',personel_transferi:'🔄 Personel Transferi',dosya_mail_gonderimi:'📧 Dosya Maili',sablon_mail_gonderimi:'📧 Şablon Maili'};
+  const TIP_RENK={odeme_degisikligi:'#2563EB',fatura_durumu:'#7C3AED',odeme_kaydi_duzenleme:'#059669',musteri_gideri_duzenleme:'#DC2626',genel_gider_duzenleme:'#D97706',sifre_sifirlama:'#DB2777',musteri_silme:'#DC2626',musteri_ekleme:'#16A34A',refakatci_ekleme:'#0891B2',belge_durumu:'#7C3AED',basvuru_ekleme:'#2563EB',randevu_tarihi:'#0D9488',dosya_yukleme:'#65A30D',musteri_bilgisi_duzenleme:'#6366F1',tahsilat_talebi:'#D97706',tahsilat_talebi_onay:'#059669',tahsilat_talebi_red:'#DC2626',lead_cekildi:'#2563EB',personel_transferi:'#7C3AED',dosya_mail_gonderimi:'#0891B2',sablon_mail_gonderimi:'#0891B2'};
 
   function detayOzet(log){
     if(!log.detail) return '—';
@@ -4917,8 +4917,8 @@ async function showUserActivity(userId, userName){
     actions=d.actions||[]; sessions=d.sessions||[];
   }catch(e){m.querySelector('div>div').innerHTML='<div style="padding:40px;text-align:center;color:var(--red)">Bağlantı hatası.</div>';return;}
 
-  const TIP_ETIKET={odeme_degisikligi:'💰 Ödeme Değişikliği',fatura_durumu:'📄 Fatura Durumu',odeme_kaydi_duzenleme:'💵 Ödeme Kaydı',musteri_gideri_duzenleme:'💸 Müşteri Gideri',genel_gider_duzenleme:'🧾 Genel Gider',sifre_sifirlama:'🔑 Şifre Sıfırlama',musteri_silme:'🗑️ Müşteri Silme',asama_degisikligi:'🔄 Aşama Değişikliği',not_ekleme:'📝 Not Ekleme',arama_kaydi:'📞 Arama Kaydı',kullanici_goruntuleme:'👁 Kullanıcı Görüntüleme'};
-  const TIP_RENK={odeme_degisikligi:'#2563EB',fatura_durumu:'#7C3AED',odeme_kaydi_duzenleme:'#059669',musteri_gideri_duzenleme:'#DC2626',genel_gider_duzenleme:'#D97706',sifre_sifirlama:'#DB2777',musteri_silme:'#DC2626',asama_degisikligi:'#0891B2',not_ekleme:'#65A30D',arama_kaydi:'#4F46E5',kullanici_goruntuleme:'#7C3AED'};
+  const TIP_ETIKET={odeme_degisikligi:'💰 Ödeme Değişikliği',fatura_durumu:'📄 Fatura Durumu',odeme_kaydi_duzenleme:'💵 Ödeme Kaydı',musteri_gideri_duzenleme:'💸 Müşteri Gideri',genel_gider_duzenleme:'🧾 Genel Gider',sifre_sifirlama:'🔑 Şifre Sıfırlama',musteri_silme:'🗑️ Müşteri Silme',asama_degisikligi:'🔄 Aşama Değişikliği',not_ekleme:'📝 Not Ekleme',arama_kaydi:'📞 Arama Kaydı',kullanici_goruntuleme:'👁 Kullanıcı Görüntüleme',musteri_ekleme:'👥 Yeni Müşteri',refakatci_ekleme:'👨‍👩‍👧 Refakatçi Ekleme',belge_durumu:'📋 Belge Durumu',basvuru_ekleme:'🌍 Başvuru Ekleme',randevu_tarihi:'📅 Randevu Tarihi',dosya_yukleme:'📎 Dosya Yükleme',musteri_bilgisi_duzenleme:'✏️ Müşteri Bilgisi',tahsilat_talebi:'📤 Tahsilat Talebi',tahsilat_talebi_onay:'✅ Tahsilat Onayı',tahsilat_talebi_red:'❌ Tahsilat Reddi',lead_cekildi:'📥 Lead Çekme',personel_transferi:'🔄 Personel Transferi',dosya_mail_gonderimi:'📧 Dosya Maili',sablon_mail_gonderimi:'📧 Şablon Maili'};
+  const TIP_RENK={odeme_degisikligi:'#2563EB',fatura_durumu:'#7C3AED',odeme_kaydi_duzenleme:'#059669',musteri_gideri_duzenleme:'#DC2626',genel_gider_duzenleme:'#D97706',sifre_sifirlama:'#DB2777',musteri_silme:'#DC2626',asama_degisikligi:'#0891B2',not_ekleme:'#65A30D',arama_kaydi:'#4F46E5',kullanici_goruntuleme:'#7C3AED',musteri_ekleme:'#16A34A',refakatci_ekleme:'#0891B2',belge_durumu:'#7C3AED',basvuru_ekleme:'#2563EB',randevu_tarihi:'#0D9488',dosya_yukleme:'#65A30D',musteri_bilgisi_duzenleme:'#6366F1',tahsilat_talebi:'#D97706',tahsilat_talebi_onay:'#059669',tahsilat_talebi_red:'#DC2626',lead_cekildi:'#2563EB',personel_transferi:'#7C3AED',dosya_mail_gonderimi:'#0891B2',sablon_mail_gonderimi:'#0891B2'};
 
   function detayOzet(log){
     if(!log.detail) return '';
@@ -4930,6 +4930,18 @@ async function showUserActivity(userId, userName){
     if(log.action_type==='fatura_durumu') return d.fatura_kesildi?'Kesildi':'Kesilmedi';
     if(log.action_type==='musteri_silme') return `${esc(d.full_name||'')} (₺${(d.prepayment||0).toLocaleString('tr-TR')})`;
     if(log.action_type==='kullanici_goruntuleme') return esc(d.goruntulenen||'');
+    if(log.action_type==='musteri_ekleme') return `${esc(d.musteri||'')} → ${esc(d.atanan||'')}'a atandı`;
+    if(log.action_type==='refakatci_ekleme') return `${esc(d.musteri||'')}: ${esc(d.refakatci||'')}`;
+    if(log.action_type==='belge_durumu') return `${esc(d.musteri||'')}: ${esc(d.belge||'')} → ${esc(d.durum||'')}`;
+    if(log.action_type==='basvuru_ekleme') return `${esc(d.musteri||'')}: ${esc(d.ulke||'')} (${esc(d.basvuran||'')})`;
+    if(log.action_type==='randevu_tarihi') return `${esc(d.musteri||'')}: ${d.tarih?fmtDate(d.tarih):''}${d.merkez?' · '+esc(d.merkez):''}`;
+    if(log.action_type==='dosya_yukleme') return `${esc(d.musteri||'')}: ${esc(d.dosya||'')}`;
+    if(log.action_type==='musteri_bilgisi_duzenleme') return esc(d.musteri||'');
+    if(log.action_type==='tahsilat_talebi'||log.action_type==='tahsilat_talebi_onay'||log.action_type==='tahsilat_talebi_red') return `₺${(d.tutar||0).toLocaleString('tr-TR')}${d.talep_eden?' — '+esc(d.talep_eden):''}`;
+    if(log.action_type==='lead_cekildi') return esc(d.musteri||'');
+    if(log.action_type==='personel_transferi') return `${esc(d.departman||'')}: ${esc(d.yeni_personel||'')}`;
+    if(log.action_type==='dosya_mail_gonderimi') return `${esc(d.musteri||'')}: ${esc(d.dosya||'')}`;
+    if(log.action_type==='sablon_mail_gonderimi') return `${esc(d.musteri||'')}: ${esc(d.sablon||'')}`;
     return Object.entries(d).map(([k,v])=>`${esc(k)}: ${esc(String(v))}`).join(', ');
   }
 
