@@ -6561,14 +6561,17 @@ function closePanel(){
 }
 async function openModal(){
   try{
-    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getUsers',token:CU.token})});
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getSalesReps',token:CU.token})});
     const d=await res.json();
-    const salesReps=(d.users||[]).filter(u=>u.role==='sales');
+    const salesReps=d.reps||[];
     const repSelect=document.getElementById('nm-rep');
-    if(CU.role==='sales'||CU.role==='evrak'||CU.role==='randevu'){
+    if(CU.role==='sales'){
+      // Sadece satış temsilcisi kendisiyle sınırlı — kendi dışında birine atayamaz.
       repSelect.innerHTML=`<option value="${CU.username}">${CU.name} (Ben)</option>`;
       repSelect.disabled=true;
     } else {
+      // Yönetici, evrak ve randevu: gerçek bir satış temsilcisi seçmeleri gerekir —
+      // evrak/randevu artık KENDİ üzerine atayamaz (bkz. backend addCustomer notu).
       repSelect.disabled=false;
       repSelect.innerHTML=salesReps.map(u=>`<option value="${u.username}">${u.name}</option>`).join('');
     }
