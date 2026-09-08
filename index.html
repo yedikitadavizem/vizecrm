@@ -1074,6 +1074,7 @@ async function initApp(){
   document.getElementById('topbar-right').innerHTML=`
     <div class="tb-search" id="tb-search-wrap"><span>🔍</span><input placeholder="Müşteri ara..." oninput="gSearch(this.value)"></div>
     <button class="btn btn-primary" onclick="openModal()">+ Yeni Müşteri</button>
+    <button class="btn btn-ghost" onclick="openBulkImportModal()">📥 Toplu Yükle</button>
   `;
   const nonMgmtBase=['today','customers','pipeline','calendar','sold','account'];
   const allowedPages=isM
@@ -6623,6 +6624,121 @@ function closePanel(){
     setTimeout(()=>showLeadQueueModal(),250);
   }
 }
+// ═══ TOPLU MÜŞTERİ YÜKLEME (Excel'den kopyala-yapıştır) ═══
+// Google Forms/Facebook entegrasyonu kesintiye uğradığında, Excel'de biriken lead'leri
+// tek tek elle girmek yerine tek seferde işlemek için. Her satır, tıpkı "+ Yeni Müşteri"
+// formundaki gibi normal addCustomer akışından geçer (round-robin dağıtım, yinelenen
+// telefon koruması, karşılama maili — hepsi aynen çalışır), sadece döngüyle art arda çağrılır.
+let bulkImportRows=[];
+
+async function openBulkImportModal(){
+  const m=document.createElement('div');
+  m.id='bulk-import-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.5);display:flex;align-items:center;justify-content:center;z-index:9999;padding:20px';
+  m.innerHTML=`<div style="background:var(--bg);border-radius:14px;max-width:720px;width:100%;padding:24px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:90vh;overflow:auto">
+    <div style="font-size:16px;font-weight:700;margin-bottom:6px">📥 Toplu Müşteri Yükle</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:14px;line-height:1.6">
+      Excel'deki satırları seçip kopyalayın (Ctrl+C), aşağıya yapıştırın (Ctrl+V). Sütun sırası:<br>
+      <b>Ad Soyad → Telefon → Email → Ülke → Vize Türü → Toplam Ücret → Ön Ödeme</b><br>
+      Sadece <b>Ad Soyad ve Telefon zorunlu</b>, diğer sütunlar boş bırakılabilir. Her satır bir müşteri olur.
+    </div>
+    <label style="font-size:11px;font-weight:600;color:var(--text2);display:block;margin-bottom:4px">Atama</label>
+    <select id="bulk-rep-select" class="sel" style="width:100%;padding:8px;margin-bottom:12px">
+      <option value="">🔀 Otomatik dağıt (round-robin — normalde nasıl çalışıyorsa aynen)</option>
+    </select>
+    <textarea id="bulk-paste" rows="8" class="fi2" placeholder="Ahmet Yılmaz	05551234567	ahmet@mail.com	🇩🇪 Almanya	Schengen Turistik	65000	32500
+Ayşe Demir	05559876543" style="width:100%;padding:10px;font-family:monospace;font-size:11px;margin-bottom:10px" oninput="parseBulkPreview()"></textarea>
+    <div id="bulk-preview"></div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('bulk-import-modal').remove()">Vazgeç</button>
+      <button class="btn btn-primary" style="flex:1" id="bulk-submit-btn" onclick="submitBulkImport(this)" disabled>✓ Hepsini Ekle</button>
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+  // Temsilci seçimini doldur (isteğe bağlı — boş bırakılırsa her satır kendi round-robin'ini alır)
+  try{
+    const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getSalesReps',token:CU.token})});
+    const d=await res.json();
+    const sel=document.getElementById('bulk-rep-select');
+    if(sel&&d.reps){
+      sel.innerHTML+=d.reps.map(u=>`<option value="${u.username}">Hepsini ${u.name}'e ata</option>`).join('');
+    }
+  }catch(e){}
+}
+
+function parseBulkPreview(){
+  const raw=document.getElementById('bulk-paste')?.value||'';
+  const lines=raw.split(/\r?\n/).map(l=>l.replace(/\r/g,'')).filter(l=>l.trim().length>0);
+  bulkImportRows=lines.map(line=>{
+    const cols=line.split('\t').length>1?line.split('\t'):line.split(',');
+    const nameV=(cols[0]||'').trim(), phoneV=(cols[1]||'').trim();
+    return {
+      name:nameV, phone:phoneV,
+      email:(cols[2]||'').trim(),
+      country:(cols[3]||'').trim(),
+      visa:(cols[4]||'').trim(),
+      fee:parseFloat((cols[5]||'').replace(/[^\d.]/g,''))||0,
+      prepay:parseFloat((cols[6]||'').replace(/[^\d.]/g,''))||0,
+      valid: !!(nameV && phoneV)
+    };
+  });
+  const validCount=bulkImportRows.filter(r=>r.valid).length;
+  const invalidCount=bulkImportRows.length-validCount;
+  const el=document.getElementById('bulk-preview');
+  if(!el)return;
+  if(bulkImportRows.length===0){ el.innerHTML=''; }
+  else{
+    el.innerHTML=`<div style="font-size:12px;font-weight:600;margin-bottom:8px">📋 ${validCount} geçerli satır bulundu${invalidCount>0?' · <span style="color:var(--red)">'+invalidCount+' satırda isim veya telefon eksik (atlanacak)</span>':''}</div>
+    <div style="max-height:220px;overflow:auto;border:1px solid var(--border);border-radius:8px">
+      <table style="width:100%;border-collapse:collapse;font-size:11px">
+        <thead style="background:var(--surface2);position:sticky;top:0"><tr>
+          <th style="padding:6px 8px;text-align:left">Ad Soyad</th><th style="padding:6px 8px;text-align:left">Telefon</th><th style="padding:6px 8px;text-align:left">Email</th><th style="padding:6px 8px;text-align:left">Ülke</th><th style="padding:6px 8px;text-align:left">Vize</th><th style="padding:6px 8px;text-align:right">Ücret</th><th style="padding:6px 8px;text-align:right">Ön Öd.</th><th style="padding:6px 8px"></th>
+        </tr></thead>
+        <tbody>${bulkImportRows.map(r=>`<tr style="${r.valid?'':'background:var(--red-bg)'}">
+          <td style="padding:5px 8px">${esc(r.name)||'—'}</td>
+          <td style="padding:5px 8px">${esc(r.phone)||'—'}</td>
+          <td style="padding:5px 8px">${esc(r.email)||'—'}</td>
+          <td style="padding:5px 8px">${esc(r.country)||'—'}</td>
+          <td style="padding:5px 8px">${esc(r.visa)||'—'}</td>
+          <td style="padding:5px 8px;text-align:right">${r.fee?r.fee.toLocaleString('tr-TR'):'—'}</td>
+          <td style="padding:5px 8px;text-align:right">${r.prepay?r.prepay.toLocaleString('tr-TR'):'—'}</td>
+          <td style="padding:5px 8px">${r.valid?'✓':'❌'}</td>
+        </tr>`).join('')}</tbody>
+      </table>
+    </div>`;
+  }
+  const btn=document.getElementById('bulk-submit-btn');
+  if(btn) btn.disabled = validCount===0;
+}
+
+async function submitBulkImport(btn){
+  const validRows=bulkImportRows.filter(r=>r.valid);
+  if(validRows.length===0){toast('Geçerli satır yok','red');return;}
+  const forceRep=document.getElementById('bulk-rep-select')?.value||'';
+  if(!confirm(validRows.length+' müşteri eklenecek'+(forceRep?'.':' ve otomatik olarak satış temsilcilerine dağıtılacak.')+' Devam edilsin mi?'))return;
+  btn.disabled=true;
+  let okCount=0, dupCount=0, failCount=0;
+  for(let i=0;i<validRows.length;i++){
+    const r=validRows[i];
+    btn.textContent=`Ekleniyor... (${i+1}/${validRows.length})`;
+    try{
+      const body={action:'addCustomer', name:r.name, phone:r.phone, email:r.email, country:r.country, visa_type:r.visa, fee:r.fee, prepay:r.prepay, token:CU.token};
+      if(forceRep) body.assignTo=forceRep;
+      const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const d=await res.json();
+      if(d.duplicate) dupCount++;
+      else if(d.success) okCount++;
+      else failCount++;
+    }catch(e){ failCount++; }
+    await new Promise(res=>setTimeout(res,150)); // sunucuyu art arda çok hızlı yormamak için küçük bekleme
+  }
+  document.getElementById('bulk-import-modal')?.remove();
+  toast(`✓ ${okCount} müşteri eklendi`+(dupCount?` · ${dupCount} zaten vardı (atlandı)`:'')+(failCount?` · ${failCount} hata`:''), failCount>0?'amber':'green');
+  await loadCustomers();
+  if(document.getElementById('cust-tbody')) refreshCustTable();
+  if(document.getElementById('kanban')) renderPipeline();
+}
+
 async function openModal(){
   try{
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'getSalesReps',token:CU.token})});
