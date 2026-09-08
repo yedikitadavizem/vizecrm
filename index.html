@@ -5305,19 +5305,63 @@ const RCLS={ulasildi:'b-completed',cevapsiz:'b-cancelled',sonra_ara:'b-callback'
 
 // "Yeni Data Çek" — satış temsilcisine atanmış ama henüz görmediği bir sonraki müşteriyi
 // backend'den tek tek çeker ve doğrudan zorunlu (kilitli) panel olarak açar.
+// "Yeni Data Çek" — bekleyen TÜM yeni müşterileri tek seferde çeker (backend hepsini
+// "pulled" işaretler), yerel bir kuyruğa (leadQueue) koyar ve ortada bir liste penceresi
+// açar. Birden fazlaysa hepsi listelenir; birine tıklayınca sağda kilitli panel açılır,
+// not/arama eklenip kapatılınca otomatik olarak kalan kuyruğa döner.
+let leadQueue=[];
+
 async function pullNextLead(){
   try{
     const res=await fetch(EDGE_FUNCTION_URL,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'pullNextLead',token:CU.token})});
     const d=await res.json();
     if(!d.success){toast('Hata: '+(d.error?.message||d.error||'Çekilemedi'),'red');return;}
-    if(!d.found){toast('📭 Şu an mevcut yeni data bulunmuyor','blue');return;}
-    forcedLeadCustomerId=d.customerId;
-    forcedLeadUnlocked=false;
+    if(!d.found||!d.leads||d.leads.length===0){toast('📭 Şu an mevcut yeni data bulunmuyor','blue');return;}
+    leadQueue=d.leads.map(l=>({id:l.file_number,name:l.full_name}));
     await loadCustomers();
     refreshCustTable();
-    await openPanel(d.customerId);
-    toast('📥 Yeni müşteri çekildi: '+(d.customerName||''),'green');
+    showLeadQueueModal();
   }catch(e){toast('Bağlantı hatası','red');}
+}
+
+// Kuyruktaki müşterileri ortada bir liste olarak gösterir. Kuyruk boşsa (hepsi işlendiyse)
+// otomatik olarak "tamamlandı" bildirimi verir.
+function showLeadQueueModal(){
+  closeLeadQueueModal();
+  if(leadQueue.length===0){
+    toast('✅ Tüm yeni müşteriler işlendi','green');
+    return;
+  }
+  const m=document.createElement('div');
+  m.id='lead-queue-modal';
+  m.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:9500;display:flex;align-items:center;justify-content:center;padding:20px';
+  m.addEventListener('click',e=>{if(e.target===m)m.remove();});
+  m.innerHTML=`<div style="background:var(--bg);border-radius:16px;max-width:480px;width:100%;max-height:80vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,.35)">
+    <div style="padding:20px 24px;border-bottom:1px solid var(--border)">
+      <div style="font-size:17px;font-weight:800">📥 ${leadQueue.length} Yeni Müşteri Bekliyor</div>
+      <div style="font-size:12px;color:var(--text2);margin-top:4px">Birine tıklayarak başlayın — not veya arama kaydı eklemeden geçemezsiniz. İşledikçe bu listeden düşer.</div>
+    </div>
+    <div style="padding:10px;overflow-y:auto">
+      ${leadQueue.map((l,i)=>`<div onclick="startLeadFromQueue('${l.id}')" style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:10px;cursor:pointer" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="width:26px;height:26px;border-radius:50%;background:var(--accent-l);color:var(--accent);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0">${i+1}</div>
+        <div style="flex:1;font-weight:600;font-size:13px">${esc(l.name)}</div>
+        <span style="font-size:16px;color:var(--text3)">›</span>
+      </div>`).join('')}
+    </div>
+  </div>`;
+  document.body.appendChild(m);
+}
+
+function closeLeadQueueModal(){
+  const m=document.getElementById('lead-queue-modal');
+  if(m)m.remove();
+}
+
+async function startLeadFromQueue(id){
+  closeLeadQueueModal();
+  forcedLeadCustomerId=id;
+  forcedLeadUnlocked=false;
+  await openPanel(id);
 }
 
 async function openPanel(id, readonly=false){
@@ -5405,7 +5449,7 @@ async function openPanel(id, readonly=false){
     :qBtnList.map(s=>`<button class="qs-btn ${c.status===s?'active':''}" onclick="moveStatus('${c.id}','${s}')">${s}</button>`).join('');
 
   document.getElementById('panel-body').innerHTML=`
-  ${(forcedLeadCustomerId===c.id&&!forcedLeadUnlocked)?'<div style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);border:2px solid #D97706;border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:20px">🔒</span><div><div style="font-weight:800;font-size:12px;color:#92400E">Bu panel kilitli — kapatamazsınız</div><div style="font-size:11px;color:#92400E;margin-top:1px">Devam etmek için aşağıdan bu müşteriye bir <b>not</b> veya <b>arama kaydı</b> ekleyin.</div></div></div>':''}
+  ${(forcedLeadCustomerId===c.id&&!forcedLeadUnlocked)?`<div style="background:linear-gradient(135deg,#FEF3C7,#FDE68A);border:2px solid #D97706;border-radius:10px;padding:12px 16px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:20px">🔒</span><div><div style="font-weight:800;font-size:12px;color:#92400E">Bu panel kilitli — kapatamazsınız${leadQueue.length>1?' · Kuyrukta '+(leadQueue.length-1)+' müşteri daha var':''}</div><div style="font-size:11px;color:#92400E;margin-top:1px">Devam etmek için aşağıdan bu müşteriye bir <b>not</b> veya <b>arama kaydı</b> ekleyin.</div></div></div>`:''}
   ${panelReadOnly?(panelSalesView?'<div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:8px 14px;font-size:11px;color:#1E40AF;margin-bottom:4px">📋 Bu müşteri evrak/randevu aşamasında — statü ve ödeme değiştiremezsiniz, not/arama/belge işlemleri açıktır.</div>':'<div style="background:#FEF9C3;border:1px solid #FDE047;border-radius:8px;padding:8px 14px;font-size:11px;color:#854D0E;margin-bottom:4px">👁 Salt okunur — bu müşteri başka departmanın sorumluluğunda.</div>'):''}
   <div class="ps">
     <div class="ps-head"><div class="ps-title">Müşteri Bilgileri</div></div>
@@ -6566,10 +6610,18 @@ function closePanel(){
     toast('⚠️ Bu müşteriye not veya arama kaydı eklemeden paneli kapatamazsınız','amber');
     return;
   }
+  // Bu müşteri bir "Yeni Data Çek" kuyruğundan açılmışsa, kapatınca kuyruktan düşer ve
+  // kalan varsa liste penceresi otomatik olarak tekrar açılır.
+  const wasQueuedLead = forcedLeadCustomerId && leadQueue.some(l=>l.id===forcedLeadCustomerId);
+  const justClosedId = forcedLeadCustomerId;
   forcedLeadCustomerId=null;
   forcedLeadUnlocked=false;
   document.getElementById('overlay').classList.remove('open');
   document.getElementById('detail-panel').classList.remove('open');
+  if(wasQueuedLead){
+    leadQueue=leadQueue.filter(l=>l.id!==justClosedId);
+    setTimeout(()=>showLeadQueueModal(),250);
+  }
 }
 async function openModal(){
   try{
